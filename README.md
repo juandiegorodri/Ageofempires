@@ -1,42 +1,59 @@
 # Mini-AoE ⚔️
 
 Versión **ultra básica de Age of Empires** para jugar con pantalla táctil
-directamente desde el navegador del iPad (Safari). Un solo archivo, sin
-instalación, sin servidor y sin proceso de compilación.
+directamente desde el navegador del iPad (Safari). La lógica vive en un único
+**`index.html`** (Canvas 2D + JavaScript puro, sin dependencias ni compilación);
+los **gráficos** son sprites pixel-art en `assets/sprites/` (con respaldo de
+emoji si faltan, así el juego nunca se rompe).
 
 ## Cómo jugar
 
-Abre **`index.html`** en el navegador. En el iPad puedes:
-1. Subir el archivo a cualquier hosting estático (o tu iCloud Drive / Files) y
-   abrirlo en Safari, o
-2. Usar GitHub Pages (Settings → Pages → rama → `/root`).
+Sírvelo como sitio estático y ábrelo en Safari. Lo más cómodo:
+- **GitHub Pages**: Settings → Pages → rama `main` → `/ (root)`. URL:
+  `https://juandiegorodri.github.io/Ageofempires/`.
 
-Elige dificultad (Fácil / Normal / Difícil) y empieza.
+En el **menú principal** eliges: mapa (Llanura / Río / Selva Negra / Riscos),
+recursos iniciales, velocidad, inteligencia de la IA y tu posición. También hay
+una pantalla **«🎨 Prueba gráfica»** que lista todos los sprites.
 
 ### Controles táctiles
 - **Toque simple** en una unidad → la selecciona.
-- **Toque simple** con unidades seleccionadas: terreno → mover · recurso →
-  recolectar (aldeanos) · enemigo → atacar · cimientos propios → construir.
-- **Arrastre con un dedo** → caja de selección (unidades militares).
-- **Doble toque** en una unidad → selecciona todas las de su tipo en pantalla.
+- **Toque simple** con unidades seleccionadas: terreno → mover · recurso o
+  edificio de producción → recolectar (aldeanos) · enemigo → atacar · cimientos
+  propios → construir · edificio propio dañado → reparar.
+- **Arrastre con un dedo** → caja de selección. **Doble toque** → todas las
+  unidades de ese tipo en pantalla.
 - **Dos dedos** → mover cámara (paneo) y pellizcar para zoom.
-- Botón **⌂** centra en tu base; **⏸** pausa.
+- Botón **👷** localiza aldeanos inactivos; **⌂** centra en tu base; **⏸** pausa.
 
 ### Objetivo
 Recolecta 🍖 comida, 🪵 madera, 💰 oro y 🪨 piedra; crea aldeanos y ejército;
-avanza de Era e investiga mejoras en la Herrería; y **destruye el Centro Urbano
+avanza de Era, investiga mejoras y tecnologías; y **destruye el Centro Urbano
 enemigo** antes de que destruyan el tuyo.
 
 ### Cuadrilátero de combate (×2 de daño)
 Arquero → Milicia → Piquetero → Caballo → Arquero (cada uno fuerte contra el
-siguiente).
+siguiente). Los héroes del Castillo heredan la categoría de su tipo.
 
-## Diseño completo
+## Funcionalidades
 
-Ver **[`DESIGN.md`](DESIGN.md)** para el documento de diseño detallado
-(interfaz táctil, economía, edificios, árbol tecnológico, IA y bucle de juego).
+El listado completo y siempre actualizado está en **[`CLAUDE.md`](CLAUDE.md)**.
+En resumen: 4 edades, ~12 edificios (incl. Casa, Castillo, granjas/minas con
+capacidad finita, Torre), héroes, **murallas** con torres de arqueros, IA con
+tres doctrinas, mapas temáticos (río con puente, riscos), resumen de partida, y
+gráficos pixel-art con vista cenital.
+
+## Documentación
+
+- **[`DESIGN.md`](DESIGN.md)** — documento de diseño (GDD).
+- **[`CLAUDE.md`](CLAUDE.md)** — guía del proyecto, normas y listado de
+  funcionalidades.
+- **[`filemap.md`](filemap.md)** — mapa de archivos y estructura del código.
+- **[`progress.md`](progress.md)** — bitácora de avance.
+- **[`assets/ART.md`](assets/ART.md)** — línea gráfica y lista de sprites.
 
 ## Tecnología
 
-Canvas 2D + JavaScript puro (sin dependencias). Pensado para poder migrarse a
-Phaser.js o Pixi.js si se quiere ampliar.
+Canvas 2D + JavaScript puro (sin dependencias). Sprites generados con Ideogram
+según `assets/ART.md`. Pensado para poder migrarse a Phaser.js / Pixi.js si se
+quiere ampliar.

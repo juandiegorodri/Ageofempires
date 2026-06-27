@@ -106,3 +106,52 @@ historial. Ver normas en `CLAUDE.md`.
   puente (izq.→der.), retaliación de aldeano, resumen (7 filas), doctrinas y la
   IA construyendo/entrenando; sin errores. Corrección: el río pasaba a ser
   vertical para no partir las bases.
+
+## 2026-06-27 — PR #6: gráficos con sprites (Ideogram)
+- Creado **`assets/ART.md`**: línea gráfica (8-bit, vista cenital) + lista
+  completa de sprites y animaciones.
+- Generadas con Ideogram 6 hojas de sprites (recursos, militares, aldeano+héroes
+  y 3 de edificios), descargadas, **recortadas por cuadrícula**, con **fondo
+  magenta quitado** (familia magenta) y auto-ajustadas → 24 PNG en
+  `assets/sprites/`. Hojas fuente en `assets/_raw/`.
+- **Loop de verificación**: revisión visual en rejilla; se regeneró la hoja de
+  economía (había salido en fondo blanco/pictórico) para unificar el estilo.
+- Integración en el motor: `loadSprites`, `spr`, `drawSprite`, `drawShadow`;
+  `drawResource/drawBuilding/drawUnit` ahora dibujan sprite con anillo de bando
+  y sombra, con **respaldo de emoji**. Barras de vida e insignias reubicadas.
+- Pantalla **«Prueba gráfica»** en el menú (`openGfxTest`): muestra los 24
+  sprites y marca los que no cargan (verificado 24/24, 0 fallidos, sin errores).
+- Documentación actualizada (`CLAUDE.md`, `filemap.md`, `progress.md`,
+  `assets/ART.md`).
+
+## 2026-06-27 — PR #7: terreno, selección, reparar, murallas, arquero c.a.c.
+- **Sprites de terreno** (Ideogram): pasto/agua/roca/tierra (tiles) + montaña,
+  muralla, torre de muralla y puerta. Suelo con textura por `createPattern`
+  (`getPattern`/`fillPattern`); río con agua y riscos con roca + `obj_mountain`.
+  32 sprites en total.
+- **Selección mejorada**: se quitó el anillo bajo los edificios (parecía sombra);
+  ahora hay sombra neutra + bandera de bando, corchetes/anillo dorado animado
+  (`drawSelBox`/`drawSelRing`) y efecto de selección/deselección (`pings`).
+- **Reparar edificios**: tocar un edificio propio dañado con aldeanos lo repara
+  gastando parte del coste (rama de `build` ampliada a construir/reparar).
+- **Murallas**: herramienta de dos toques (`wallTap`/`wallPoints`), coste en
+  piedra por tramo, **Torres de Muralla** cada N que disparan (arqueros
+  protegidos), y colisión que bloquea a unidades rivales (`frameWalls`/
+  `blockedByWall`).
+- **Arquero c.a.c.**: daño a la mitad si el enemigo lo alcanza de cerca.
+- Verificado en Chromium headless: 32/32 sprites, murallas (vertical/horizontal),
+  reparación (hp 360→393), penalización del arquero (10→5), sin errores.
+
+## 2026-06-27 — PR #7 (cont.): producción finita, tasa desde edificios, terreno claro, murallas H/V
+- **Nivel de producción**: ahora cuenta a los aldeanos que recolectan de
+  edificios de producción (antes salía 0/s). Corregido en `updateTopbar`.
+- **Capacidad finita (500)**: granja/mina de oro/mina de piedra tienen `reserve`
+  de 500; al agotarse se marcan «agotada» y hay que **recargarlas reparando**
+  (cuesta el coste de construcción). `bldHasReserve`, gather decrementa reserva,
+  rama de `build` añade la recarga; el panel muestra la reserva.
+- **Terreno más claro**: se regeneraron los tiles (pasto/agua/roca/tierra) en
+  tonos claros para que las unidades contrasten y se distingan mejor.
+- **Murallas horizontal y vertical**: sprites `bld_wall_h`/`bld_wall_v` elegidos
+  según la orientación de la línea (`b.dir`). 34 sprites en total.
+- Verificado: tasa desde granja (+0.7/s), recarga 0→500 gastando 60 de madera,
+  murallas en ambas orientaciones, sin errores.
