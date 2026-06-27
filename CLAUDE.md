@@ -97,8 +97,9 @@ historial; solo se agrega.
   recolección se suma directa al marcador (sin viaje de retorno). Al agotarse un
   nodo, el aldeano busca el siguiente del mismo tipo.
 - **Unidades (5)**: Aldeano, Milicia, Piquetero, Arquero, Caballo.
-- **Edificios (6)**: Centro Urbano, Cuartel, Galería de Tiro, Establo, Herrería
-  y Torre. Prerrequisitos: Galería y Establo requieren Cuartel.
+- **Edificios (8)**: Centro Urbano, Casa, Cuartel, Galería de Tiro, Establo,
+  Herrería, Torre y Castillo. Prerrequisitos: Galería y Establo requieren
+  Cuartel; el Castillo requiere Edad Feudal (Era III).
 - **Cuadrilátero de combate (×2)**: Arquero → Milicia → Piquetero → Caballo →
   Arquero (cada uno fuerte contra el siguiente).
 - **Entrenamiento por cola**: cada edificio productor tiene cola con coste y
@@ -107,11 +108,12 @@ historial; solo se agrega.
   los aldeanos los construyen con barra de progreso.
 - **Mejoras de Herrería (4)**: Flechas de Punta de Hierro, Forja de Espadas,
   Escudos de Madera, Hachas Afiladas. Requieren Edad de las Herramientas.
-- **Avance de Era**: a la Edad de las Herramientas (cuesta piedra + oro);
-  desbloquea las mejoras de la Herrería.
+- **Avance de Era**: cuatro edades (ver «Funcionalidades añadidas»); cada avance
+  cuesta recursos y desbloquea contenido.
 - **IA enemiga**: 3 dificultades (Fácil/Normal/Difícil); recolecta, construye,
-  entrena ejército variado y lanza oleadas de ataque.
-- **Población**: límite global (60), mostrado en la barra superior.
+  avanza de era, entrena ejército variado y lanza oleadas de ataque.
+- **Población**: límite dinámico según edificios (ver «Población dinámica»),
+  mostrado en la barra superior.
 - **Auto-defensa**: las unidades militares inactivas atacan enemigos cercanos.
 - **Victoria/Derrota**: gana quien destruye el Centro Urbano rival.
 - **UI/UX**: barra superior de recursos, panel inferior de acciones contextual,
@@ -136,3 +138,29 @@ historial; solo se agrega.
   superior se muestra la tasa actual de recolección (p. ej. «+1.4/s»), calculada
   según los aldeanos que están recolectando ese recurso. Se resalta en verde
   cuando hay producción activa.
+- **Menú principal con opciones** (PR #4): antes de jugar se configura la
+  partida: mapa, recursos iniciales (Bajo/Estándar/Alto), velocidad
+  (Lenta/Normal/Rápida), inteligencia de la IA (Fácil/Normal/Difícil) y posición
+  del jugador (Izquierda/Derecha/Aleatoria).
+- **Mapas con temática** (PR #4): Llanura, Río (río central que bloquea
+  construcción), Selva Negra (madera abundante por todo el mapa) y Riscos
+  (bloques rocosos que bloquean construcción; abunda piedra y oro).
+- **Población dinámica** (PR #4): se empieza con 20 de población. El Centro
+  Urbano aporta 20, cada Casa 🏠 +5 y el Castillo 🏰 +50 (tope absoluto 200).
+- **Edificios nuevos** (PR #4): Casa 🏠 (sube población) y Castillo 🏰 (sube +50
+  población, defensa potente con auto-disparo; requiere Edad Feudal).
+- **Cuatro edades** (PR #4): Inicial → Edad de las Herramientas → Edad Feudal →
+  Edad Imperial. Cada avance cuesta más recursos y desbloquea contenido
+  (mejoras de Herrería en Era II, Castillo en Era III, tecnologías económicas de
+  nivel 2 en Era IV).
+- **Tecnologías económicas por recurso** (PR #4): en el Centro Urbano se
+  investigan tecnologías que aumentan la recolección de cada recurso (Molino,
+  Aserradero, Minería de Oro, Cantera y sus versiones avanzadas). Cada tier suma
+  un % a la tasa de ese recurso.
+- **Velocidad de partida** (PR #4): multiplicador global del ritmo del juego
+  (Lenta ×0.7, Normal ×1, Rápida ×1.6).
+- **Cola de edificio editable** (PR #4): al seleccionar un edificio se ve su cola
+  de unidades como iconos; tocar uno lo cancela y reembolsa su coste.
+- **IA mejorada** (PR #4): el enemigo avanza de era, construye casas al acercarse
+  al tope de población, levanta castillos (en Difícil/Era III), reparte sus
+  aldeanos de forma ponderada y entrena la unidad que puede pagar.
