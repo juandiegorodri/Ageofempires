@@ -141,3 +141,17 @@ historial. Ver normas en `CLAUDE.md`.
 - **Arquero c.a.c.**: daño a la mitad si el enemigo lo alcanza de cerca.
 - Verificado en Chromium headless: 32/32 sprites, murallas (vertical/horizontal),
   reparación (hp 360→393), penalización del arquero (10→5), sin errores.
+
+## 2026-06-27 — PR #7 (cont.): producción finita, tasa desde edificios, terreno claro, murallas H/V
+- **Nivel de producción**: ahora cuenta a los aldeanos que recolectan de
+  edificios de producción (antes salía 0/s). Corregido en `updateTopbar`.
+- **Capacidad finita (500)**: granja/mina de oro/mina de piedra tienen `reserve`
+  de 500; al agotarse se marcan «agotada» y hay que **recargarlas reparando**
+  (cuesta el coste de construcción). `bldHasReserve`, gather decrementa reserva,
+  rama de `build` añade la recarga; el panel muestra la reserva.
+- **Terreno más claro**: se regeneraron los tiles (pasto/agua/roca/tierra) en
+  tonos claros para que las unidades contrasten y se distingan mejor.
+- **Murallas horizontal y vertical**: sprites `bld_wall_h`/`bld_wall_v` elegidos
+  según la orientación de la línea (`b.dir`). 34 sprites en total.
+- Verificado: tasa desde granja (+0.7/s), recarga 0→500 gastando 60 de madera,
+  murallas en ambas orientaciones, sin errores.

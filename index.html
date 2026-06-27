@@ -352,7 +352,7 @@ const SPRITE_FILES = [
   'unit_hero_sword','unit_hero_archer','unit_hero_cav',
   'bld_town','bld_house','bld_barracks','bld_range','bld_stable','bld_blacksmith',
   'bld_tower','bld_castle','bld_farm','bld_goldmine','bld_quarry','bld_lumbercamp',
-  'bld_wall','bld_wall_tower',
+  'bld_wall','bld_wall_h','bld_wall_v','bld_wall_tower',
   'tile_grass','tile_water','tile_mountain','tile_dirt','obj_mountain','obj_gate',
 ];
 const sprites = {};
@@ -405,10 +405,12 @@ function makeUnit(owner, type, x, y){
 }
 function makeBuilding(owner, btype, x, y, built){
   const d = BLD[btype];
-  return { id:genId(), kind:'building', owner, btype, x, y,
+  const b = { id:genId(), kind:'building', owner, btype, x, y,
     hp: built? d.hp : Math.max(1, d.hp*0.05), maxHp:d.hp,
     built:!!built, progress: built? d.build : 0, queue:[], rally:null,
     cd:0, anim:0, shotAt:null };
+  if(d.produces){ b.maxReserve = 500; b.reserve = 500; }   // capacidad finita
+  return b;
 }
 function makeResource(rtype, x, y){
   const d = RES[rtype];
@@ -702,12 +704,13 @@ function nearestResourceOfType(e, rtype){
   return best;
 }
 // Busca la fuente más cercana de un recurso: nodo natural o edificio productor propio.
+function bldHasReserve(o){ return o.reserve===undefined || o.reserve>0; }
 function nearestGatherFor(e, rtype){
   let best=null, bd=1e9;
   for(const o of entities){
     let ok=false;
     if(o.kind==='resource' && o.rtype===rtype && o.amount>0) ok=true;
-    else if(o.kind==='building' && o.owner===e.owner && o.built && BLD[o.btype].produces===rtype) ok=true;
+    else if(o.kind==='building' && o.owner===e.owner && o.built && BLD[o.btype].produces===rtype && bldHasReserve(o)) ok=true;
     if(ok){ const dd=dist(e,o); if(dd<bd){ bd=dd; best=o; } }
   }
   return best;
@@ -718,7 +721,7 @@ function nearestAnyResource(e){
   for(const o of entities){
     let ok=false;
     if(o.kind==='resource' && o.amount>0) ok=true;
-    else if(o.kind==='building' && o.owner===e.owner && o.built && BLD[o.btype].produces) ok=true;
+    else if(o.kind==='building' && o.owner===e.owner && o.built && BLD[o.btype].produces && bldHasReserve(o)) ok=true;
     if(ok){ const dd=dist(e,o); if(dd<bd){ bd=dd; best=o; } }
   }
   return best;
@@ -814,7 +817,8 @@ function update(dt){
       const g = find(e.gather.id);
       const isBld = g && g.kind==='building';
       const rtype = isBld ? BLD[g.btype].produces : (e.gather.rtype || (g&&g.rtype));
-      const invalid = !g || (isBld && (!g.built || !BLD[g.btype].produces)) || (!isBld && g.amount<=0);
+      const exhausted = isBld && g.reserve!==undefined && g.reserve<=0;
+      const invalid = !g || (isBld && (!g.built || !BLD[g.btype].produces || exhausted)) || (!isBld && g.amount<=0);
       if(invalid){
         const next = nearestGatherFor(e, rtype);
         if(next){ e.gather=next; } else { e.state='idle'; e.gather=null; }
@@ -823,8 +827,11 @@ function update(dt){
         if(dist(e,g) > reach){ stepToward(e, g, dt); }
         else {
           e.anim = 0.3;
-          if(isBld){ side(e.owner).res[rtype] += gatherRate(e, rtype)*dt; }   // renovable
-          else {
+          if(isBld){
+            const amt = Math.min(g.reserve, gatherRate(e, rtype)*dt);   // capacidad finita
+            g.reserve -= amt; side(e.owner).res[rtype] += amt;
+            if(g.reserve<=0 && e.owner==='player') showHint(BLD[g.btype].name+' agotada — repárala para recargar 500.');
+          } else {
             const amt = Math.min(g.amount, gatherRate(e, rtype)*dt);
             g.amount -= amt; side(e.owner).res[rtype] += amt;
             if(g.amount<=0){ removeEntity(g); }
@@ -834,8 +841,10 @@ function update(dt){
     }
     else if(e.state==='build' && e.build){
       const b = find(e.build);
+      const canRefill = b && BLD[b.btype].produces && b.reserve!==undefined && b.reserve < b.maxReserve;
+      const needsWork = b && (!b.built || b.hp < b.maxHp || canRefill);
       if(!b){ e.state='idle'; e.build=null; }
-      else if(b.built && b.hp>=b.maxHp){ e.state='idle'; e.build=null; }   // nada que hacer
+      else if(!needsWork){ e.state='idle'; e.build=null; }   // nada que hacer
       else {
         const reach = radiusOf(b)+14;
         if(dist(e,b) > reach){ stepToward(e, b, dt); }
@@ -847,6 +856,18 @@ function update(dt){
           if(b.progress>=need){ b.built=true; b.hp=BLD[b.btype].hp; e.state='idle'; e.build=null;
             side(b.owner).stats.built++;
             if(e.owner==='player') showHint(BLD[b.btype].name+' construido.'); }
+        } else if(b.built && BLD[b.btype].produces && b.reserve < b.maxReserve && b.hp>=b.maxHp){
+          // RECARGAR un edificio de producción (hasta 500; cuesta el coste de construcción)
+          const dr = Math.min(b.maxReserve - b.reserve, 160*dt);
+          const cost = BLD[b.btype].cost, s = side(e.owner);
+          const pay = {}; let canPay=true;
+          for(const k in cost){ pay[k] = cost[k]*(dr/b.maxReserve); if((s.res[k]||0) < pay[k]) canPay=false; }
+          if(canPay){
+            for(const k in pay) s.res[k]-=pay[k];
+            b.reserve += dr; e.anim=0.3;
+            if(b.reserve>=b.maxReserve){ b.reserve=b.maxReserve; e.state='idle'; e.build=null;
+              if(e.owner==='player') showHint(BLD[b.btype].name+' recargada (500).'); }
+          } else { e.state='idle'; e.build=null; if(e.owner==='player') showHint('Sin recursos para recargar.'); }
         } else {
           // REPARAR (gasta recursos del coste de construcción)
           const dh = Math.min(b.maxHp - b.hp, 22*dt);
@@ -1333,7 +1354,9 @@ function drawBuilding(e){
   ctx.globalAlpha = e.built?1:0.55;
   if(img){
     if(e.btype==='wall'){
-      drawSprite('bld_wall', s.x, s.y, d.size*1.05*cam.zoom, false);   // segmento bajo, centrado
+      const wn = e.dir==='v' ? 'bld_wall_v' : 'bld_wall_h';
+      if(!drawSprite(wn, s.x, s.y, d.size*1.2*cam.zoom, false))
+        drawSprite('bld_wall', s.x, s.y, d.size*1.05*cam.zoom, false);   // respaldo
     } else {
       drawSprite('bld_'+e.btype, s.x, s.y + sz*0.12, spriteH, true);
     }
@@ -1625,11 +1648,18 @@ function handleTap(p){
       const vills = selUnits.filter(u=>u.type==='villager');
       if(vills.length){ for(const u of vills){ u.state='gather'; u.gather=ent; u.resumeGather=null; u.lastRtype=ent.rtype; u.halt=false; } showHint('Recolectando '+ent.rtype+'.'); return; }
     }
-    // Recolectar de un edificio de producción propio (granja/mina/cantera)
+    // Edificio de producción propio (granja/mina/cantera)
     if(ent && ent.owner==='player' && ent.kind==='building' && ent.built && BLD[ent.btype].produces){
       const vills = selUnits.filter(u=>u.type==='villager');
-      if(vills.length){ for(const u of vills){ u.state='gather'; u.gather=ent; u.resumeGather=null; u.lastRtype=BLD[ent.btype].produces; u.halt=false; }
-        showHint('Trabajando en '+BLD[ent.btype].name+'.'); return; }
+      if(vills.length){
+        if(ent.reserve!==undefined && ent.reserve<=0){
+          // agotado → recargar (reparación)
+          for(const u of vills){ u.state='build'; u.build=ent.id; u.halt=false; }
+          showHint('Recargando '+BLD[ent.btype].name+'…'); return;
+        }
+        for(const u of vills){ u.state='gather'; u.gather=ent; u.resumeGather=null; u.lastRtype=BLD[ent.btype].produces; u.halt=false; }
+        showHint('Trabajando en '+BLD[ent.btype].name+'.'); return;
+      }
     }
     if(ent && (ent.owner==='enemy')){
       // Todas las unidades pueden atacar (incluidos aldeanos)
@@ -1737,12 +1767,13 @@ function wallTap(p){
   pts.forEach((pt,i)=>{ cost.stone += (i%WALL_TOWER_EVERY===0?BLD.wall_tower.cost.stone:BLD.wall.cost.stone); });
   if(!canAfford(player, cost)){ showHint('Necesitas 🪨'+Math.ceil(cost.stone)+' para '+pts.length+' tramos.'); placement=null; updateActionPanel(); return; }
   pay(player, cost);
-  const vills=selectedUnits().filter(u=>u.type==='villager');
+  const dir = Math.abs(placement.start.x - w.x) >= Math.abs(placement.start.y - w.y) ? 'h' : 'v';
   let placed=0;
   pts.forEach((pt,i)=>{
     if(onObstacle(pt.x,pt.y)) return;
     const bt = (i%WALL_TOWER_EVERY===0)?'wall_tower':'wall';
     const b=makeBuilding('player', bt, pt.x, pt.y, false);
+    b.dir = dir;
     entities.push(b); placed++;
   });
   placement=null; updateActionPanel();
@@ -1804,6 +1835,12 @@ function updateActionPanel(){
     const produces = ['town','barracks','range','stable'].includes(b.btype);
     if(b.built && produces && ps>1) info += ` · ⚡ x${ps.toFixed(1)} (${countBuildings('player',b.btype)})`;
     if(BLD[b.btype].pop) info += ` · 👥 +${BLD[b.btype].pop}`;
+    if(b.built && BLD[b.btype].produces && b.reserve!==undefined){
+      const ico={food:'🍖',wood:'🪵',gold:'🪙',stone:'🪨'}[BLD[b.btype].produces];
+      info += b.reserve<=0
+        ? ` · <b style="color:#d05a5a">agotada</b> (repara para recargar 500)`
+        : ` · ${ico} reserva ${Math.ceil(b.reserve)}/${b.maxReserve}`;
+    }
     selinfoEl.innerHTML=info;
     if(b.built){
       // Fila de cola: cada unidad es un botón que la cancela (reembolsa)
@@ -1907,16 +1944,16 @@ function updateTopbar(){
   document.getElementById('rGold').textContent=Math.floor(player.res.gold);
   document.getElementById('rStone').textContent=Math.floor(player.res.stone);
   document.getElementById('rPop').textContent=(popCount('player'))+'/'+popCap('player');
-  // Nivel de producción actual por recurso (suma de aldeanos recolectando cada tipo)
+  // Nivel de producción actual por recurso (incluye nodos y edificios de producción)
   const rates={food:0,wood:0,gold:0,stone:0};
   for(const e of entities){
-    if(e.kind==='unit'&&e.owner==='player'&&e.type==='villager'&&e.state==='gather'&&e.gather){
-      const node = find(e.gather.id)||e.gather;
-      const rt = e.gather.rtype || (node&&node.rtype);
-      if(rt && node && node.amount>0 && dist(e,node) <= radiusOf(node)+14){
-        rates[rt]+=gatherRate(e, rt);
-      }
-    }
+    if(!(e.kind==='unit'&&e.owner==='player'&&e.type==='villager'&&e.state==='gather'&&e.gather)) continue;
+    const g = find(e.gather.id); if(!g) continue;
+    const isBld = g.kind==='building';
+    const rt = isBld ? BLD[g.btype].produces : g.rtype;
+    if(!rt) continue;
+    const active = isBld ? (g.built && (g.reserve===undefined || g.reserve>0)) : (g.amount>0);
+    if(active && dist(e,g) <= radiusOf(g)+14){ rates[rt]+=gatherRate(e, rt); }
   }
   for(const rt of ['food','wood','gold','stone']){
     const el=document.getElementById('rate'+rt[0].toUpperCase()+rt.slice(1));

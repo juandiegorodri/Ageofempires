@@ -224,3 +224,10 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
 - **Arquero en cuerpo a cuerpo** (PR #7): a distancia pega completo, pero si el
   enemigo lo alcanza de cerca su daño baja a la mitad (no es especialista del
   combate cercano).
+- **Capacidad finita de edificios de producción** (PR #7): Granja, Mina de Oro y
+  Mina de Piedra dan **500 unidades** y luego se **agotan**; hay que recargarlas
+  reparándolas (cuesta el coste de construcción). El nivel de producción de la
+  barra superior cuenta también a quienes recolectan de estos edificios.
+- **Terreno claro y murallas H/V** (PR #7): texturas de suelo en tonos claros
+  para que las unidades contrasten; sprites de muralla horizontal y vertical
+  según la orientación.
