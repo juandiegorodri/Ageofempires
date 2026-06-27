@@ -53,3 +53,29 @@ historial. Ver normas en `CLAUDE.md`.
 - Documentación actualizada (`CLAUDE.md`, `filemap.md`, `progress.md`).
 - Verificado en Chromium headless: tasas correctas (+0.7/s, +1.4/s); la IA
   termina el cuartel, entrena unidades y construye en orden; sin errores.
+
+## 2026-06-27 — PR #4: menú, mapas, población, edades, tecnologías y cola
+- **Menú principal** con opciones de partida: mapa, recursos iniciales, velocidad,
+  inteligencia de la IA y posición del jugador.
+- **Mapas temáticos**: Llanura, Río (bloquea construcción en el cauce), Selva
+  Negra (madera abundante) y Riscos (bloques rocosos, abunda piedra/oro).
+  Funciones `generateMap`, `onObstacle`, `drawTerrain` y color de fondo por mapa.
+- **Población dinámica**: se inicia con 20; Centro Urbano +20, Casa +5,
+  Castillo +50 (tope 200). `popCap` reemplaza la constante fija.
+- **Edificios nuevos**: Casa 🏠 y Castillo 🏰 (defensa potente + población,
+  requiere Era III).
+- **Cuatro edades** (`AGES`): Inicial → Herramientas → Feudal → Imperial;
+  `tryAdvanceAge` ahora es multi-era.
+- **Tecnologías económicas por recurso** (`ECON`, `buyEcon`, `nextEcon`):
+  Molino/Aserradero/Minería/Cantera y versiones avanzadas; aumentan la
+  recolección de cada recurso (`mods.resMult`, `gatherRate` por recurso).
+- **Velocidad de partida**: `gameSpeed` escala el `dt` del bucle.
+- **Cola de edificio editable**: iconos de la cola; tocar uno cancela y reembolsa
+  (`cancelQueued`). Arreglado `clearActions` para no duplicar la fila de cola.
+- **IA mejorada**: avanza de era, construye casas al llegar al tope de población,
+  levanta castillos (Difícil/Era III), recolección ponderada y entrena la unidad
+  que puede pagar.
+- Documentación actualizada (`CLAUDE.md`, `filemap.md`, `progress.md`).
+- Verificado en Chromium headless: menú y opciones, casa (+5) y castillo (+50),
+  avance de edades, tecnología de recurso (+30%), cancelación con reembolso,
+  mapas con obstáculos que bloquean construcción; sin errores de consola.
