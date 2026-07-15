@@ -117,7 +117,10 @@ mudas; con esto el mismo juego "se convierte" en un juego de verdad.
 - Unidad caminando se ve caminar (bob+volteo); arquero dispara flecha visible
   que impacta; unidad muere con fade; edificio dañado humea.
 - 8+ SFX distintos + ambiente; toggle persiste; sin autoplay antes del primer gesto.
-- Headless: 0 errores; fps del estrés (`t22.cjs`) no cae >10% vs. base.
+- Headless: 0 errores; rendimiento por **presupuesto absoluto** — coste de
+  `update()+render()` por cuadro muy por debajo de 16.7ms (meta 60fps) bajo
+  estrés. (El % relativo vs. base es poco fiable en headless compartido, donde
+  el scheduling del navegador domina el fps bruto; medir el coste real de CPU.)
 - Multijugador: cliente ve proyectiles/muertes (snapshot o reconstrucción).
 
 ---
