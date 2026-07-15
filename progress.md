@@ -551,3 +551,17 @@ Ver `PLAN.md` §4 F3. Cambios:
   atasco (`e.stuckT>0.6s`) seguiría intentándolo cada 0.6s sin quedar
   encallado en un bucle de error, pero podría no encontrar camino mientras el
   cerco exista.
+- **Arreglo tras validación del orquestador (misma fase)**: se detectó y
+  corrigió una **cuña al rodear el EXTREMO de una muralla larga**: la unidad
+  quedaba clavada contra el último tramo (dentro de su radio de colisión de
+  ~28px) porque el A* seguía apuntando hacia el lado bloqueado y el
+  deslizamiento por ejes no ofrecía salida; el repath no la liberaba porque la
+  geometría volvía a atraparla. Ahora, cuando ambos ejes están bloqueados por
+  una muralla/puerta, `stepToward` empuja la unidad radialmente ALEJÁNDOSE del
+  muro más cercano (`nearestBlockingWall`) hasta salir de su radio de colisión,
+  y el repath retoma el rodeo. Solo se activa en la cuña real (rarísimo en
+  juego normal), así que no afecta el paso normal. Verificado headless: una
+  unidad rodea un muro sólido de ~920px y LLEGA al destino (antes se quedaba a
+  ~490px), sin regresión del movimiento abierto, del cruce por el puente del
+  río, del combate/MP (Fases 1-3) ni de las puertas; A* ~0.35ms/orden de 30,
+  estrés ~4.2ms/cuadro con ~257 entidades.

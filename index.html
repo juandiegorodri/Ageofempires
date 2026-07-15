@@ -1818,9 +1818,33 @@ function stepToward(e, t, dt){
   if(blockedByWall(e, nx, ny)){
     if(!blockedByWall(e, nx, e.y)) ny=e.y;
     else if(!blockedByWall(e, e.x, ny)) nx=e.x;
-    else { nx=e.x; ny=e.y; }
+    else {
+      // Cuña total en el extremo de una muralla: ambos ejes bloqueados. En vez de
+      // quedarse clavada (lo que atrapaba a las unidades que rodean el final de
+      // un muro largo, porque el A* seguía apuntando hacia el lado bloqueado),
+      // empuja la unidad radialmente ALEJÁNDOSE del muro que la bloquea hasta
+      // salir de su radio de colisión; el repath (0.6s) retoma el rodeo. Solo
+      // ocurre en el caso raro de cuña real, así que no afecta el paso normal.
+      const w = nearestBlockingWall(e);
+      if(w){
+        const ax=e.x-w.x, ay=e.y-w.y, ad=Math.hypot(ax,ay)||1, push=sp*dt;
+        const px=e.x+ax/ad*push, py=e.y+ay/ad*push;
+        if(!blocksUnit(px,py) && !blockedByWall(e,px,py)){ nx=px; ny=py; }
+        else { nx=e.x; ny=e.y; }
+      } else { nx=e.x; ny=e.y; }
+    }
   }
   e.x=nx; e.y=ny;
+}
+// Muro/puerta más cercano que bloquea a esta unidad (para el empuje anti-cuña).
+function nearestBlockingWall(e){
+  let best=null, bd=Infinity;
+  for(const w of frameWalls){
+    if(!wallBlocksSide(w, e.owner)) continue;
+    const dd=(e.x-w.x)*(e.x-w.x)+(e.y-w.y)*(e.y-w.y);
+    if(dd<bd){ bd=dd; best=w; }
+  }
+  return best;
 }
 // ¿Este muro/puerta bloquea el paso a unidades del bando `moverSide`? Las
 // murallas normales nunca bloquean a su propio dueño; las puertas tampoco
