@@ -398,8 +398,55 @@ F6 Guardar+tutorial ──► F7 MP web (WebRTC) ──► F8 Rendimiento final
 | F1 Vida | ✅ | #10 | Animación procedural sin sprites nuevos, proyectiles reales con daño al impacto, cadáveres/flash/humo-fuego, 10 SFX sintetizados + ambiente, ping verde. Ver `progress.md` 2026-07-15. |
 | F2 Niebla+minimapa | ✅ | #11 | Niebla de 3 estados (65×38 celdas, 40px), recálculo cada 150ms sobre offscreen de baja resolución escalado con suavizado bilineal; minimapa colapsable a ~4.5Hz con control táctil de cámara; alertas con throttle 8s/zona (pulso + botón ⚔️). Puramente render/cliente, protocolo MP intacto. Ver `progress.md` 2026-07-15. |
 | F3 Manos RTS | ✅ | #12 | Grupos de control ①②③ (locales del cliente, limpian muertos); ataque-mover (estado `amove`, comando MP propio, auto-aggro continuo sin perder el destino); "Todo el ejército" + chips de filtro por tipo + doble toque en edificio; inercia de cámara con clamp elástico (sin temblor); rally encadenable sobre recurso con línea+bandera. Ver `progress.md` 2026-07-15. |
-| F4 Pathfinding | ✅ | #13 | A* en rejilla gruesa (40px, cachada por bando, invalidada solo al construir/destruir muralla o alternar puerta), formaciones (filas de 6, melee delante/arqueros detrás, asignación greedy), Puerta 🚪 como tramo central de muralla (bloquea siempre al rival; cerrada manualmente bloquea también al dueño), repath a los 0.6s atascado, separación consciente de murallas. MP: A* solo en el host. Ver `progress.md` 2026-07-15. |
-| F5 Profundidad | ✅ | #14 | Líneas de mejora por Era (chevrons ▲, tier en `side.upg`, gratis en MP); Catapulta + Taller de Asedio (daño de área ×4 vs edificios, proyectil parabólico); guarnición de torres/castillo/Centro Urbano (+1 flecha/arquero guarnecido); Mercado (100 recurso ↔ 70/130 oro); pasada de balance con arena 20v20 headless (tabla arriba). Sprites de catapulta/taller/mercado pendientes de generar. Ver `progress.md` 2026-07-15. |
+| F4 Pathfinding | ✅ | #13 | A* en rejilla gruesa (40px, cachada por bando, invalidada solo al construir/destruir muralla o alternar puerta), formaciones (filas de 6, melee delante/arqueros detrás, asignación greedy), Puerta 🚪 como tramo central de muralla, repath a los 0.6s atascado, separación consciente de murallas. MP: A* solo en el host. **Superado por la corrección post-lanzamiento del 2026-07-16** (2ª ronda): entonces una muralla normal NO bloqueaba a su propio dueño (solo al rival); ahora bloquea a TODOS, y solo una Puerta abierta deja pasar al dueño (con `frameOpenGates` dándole un pasillo real junto a la puerta). Ver `progress.md` 2026-07-15 y 2026-07-16 (2). |
+| F5 Profundidad | ✅ | #14 | Líneas de mejora por Era (chevrons ▲, tier en `side.upg`, gratis en MP; insignia mejorada a óvalo+⭐ en la corrección post-lanzamiento); Catapulta + Taller de Asedio (daño de área ×4 vs edificios, proyectil parabólico; dibujo procedural en vez de emoji desde la 2ª ronda de correcciones); guarnición de torres/castillo/Centro Urbano (+1 flecha/arquero guarnecido; deshabilitada por defecto desde la corrección post-lanzamiento, opción de menú para activarla); Mercado (100 recurso ↔ 70/130 oro); pasada de balance con arena 20v20 headless (tabla arriba). Ver `progress.md` 2026-07-15 y 2026-07-16 (1 y 2). |
 | F6 Memoria+tutorial | ✅ | #15 | Guardado local en 3 ranuras + autoguardado (2min/`visibilitychange`), reutiliza `serEntity`/`serSide` sin flip de bandos, guarnición reparada aparte con ids reales; ajustes (volumen SFX/ambiente, velocidad de cámara, fps, reiniciar tutorial) persistentes; tutorial de 10 pasos por sondeo de estado real (no temporizador), saltable, no se repite; línea de tiempo (recursos+valor militar cada 30s) en el resumen. Todo deshabilitado limpiamente en MP. Ver `progress.md` 2026-07-15. |
 | F7 MP web | ✅ | #16 | Transporte abstraído (`net.sendRaw`/`net.onRaw`), transporte A=WS LAN sin cambios (regresión verificada) y B=WebRTC/PeerJS bajo demanda con código de sala de 6 caracteres; menú con pestañas Online/Red local; interpolación de posiciones en cliente (lerp por fotograma); snapshots con deltas (~79% menos bytes/s medido vs. completo); reconexión ~60s con el mismo código. PeerJS real no verificable en headless (sandbox sin egreso de red para el navegador) — código y fallback honesto verificados, conexión real pendiente de red/iPad. Ver `progress.md` 2026-07-15/16. |
 | F8 Rendimiento | ✅ | #17 | Atlas de sprites pre-escalado (30/34, fallback PNG suelto perezoso→emoji), pool de proyectiles/pings (retirada O(1)), `frameWalls` sin `.filter()` por cuadro, pantalla de carga con barra + meta Open Graph. Estrés 285 entidades ≈1.4-1.5ms/cuadro; partida larga (~20min simulados) con heap estable; regresión SP+MP LAN sin errores. Plan **F1-F8 completo**. Ver `progress.md` 2026-07-16. |
+
+## 7. Estado del plan: COMPLETO (F1-F8) + dos rondas de correcciones post-lanzamiento
+
+El plan maestro de 8 fases se ejecutó por completo (PRs #10-#17, todas
+fusionadas en `main`). Tras jugarlo de verdad, hubo **dos rondas más** de
+correcciones (fuera del plan original, pero documentadas con el mismo rigor):
+
+- **2026-07-16 (1) — PR #18**: 11 problemas de juego real — sonido de
+  recolección continuo quitado; granjas/minas se recargan solas en vez de
+  abandonarse; huecos en extremos de murallas cortas cerrados
+  (`snapWallEndpoint`); puerta orientada según `e.dir`; insignia de tier
+  legible (óvalo+⭐); catapulta con respaldo más visible; guarnición
+  deshabilitada por defecto (antes ocurría por accidente al tocar el propio
+  edificio); infografía rápida de controles al empezar cada partida; Centro
+  Urbano con autodefensa; tiempo de tregua configurable; velocidad de
+  partida ajustable en vivo desde Ajustes.
+- **2026-07-16 (2) — PR #19**: 6 problemas más — **las murallas ahora
+  bloquean también al dueño** (antes solo al rival; corrección de diseño
+  importante, con su propio efecto colateral geométrico ya corregido — ver
+  `frameOpenGates` en `progress.md`); torres de muralla gratis eliminadas
+  (ahora se construyen explícitamente sobre un tramo, pagando su coste real);
+  puerta con concordancia visual total con la muralla (mismo sprite + marca
+  superior); catapulta y Taller de Asedio con dibujo procedural (sin sprites
+  propios, Ideogram sigue sin estar disponible); sonido de construcción
+  suavizado.
+
+Detalle completo, cifras de cada prueba y metodología en `progress.md`
+(entradas 2026-07-16). Listado de funcionalidades siempre actualizado en
+`CLAUDE.md` §6.
+
+**Pendientes conocidos y documentados con honestidad** (no bloquean el uso
+normal del juego):
+- Conexión WebRTC/PeerJS real de punta a punta (Fase 7): el código y el
+  fallback están verificados, pero la señalización real no se pudo probar en
+  el sandbox de desarrollo (sin salida de red para el navegador headless).
+  Pendiente de probar con una conexión a internet real o desde el iPad.
+- Matriz de QA en dispositivo físico (iPad/iPhone Safari real, PWA instalada,
+  rotación, multitarea) — Fase 8: no verificable sin hardware real.
+- Sprites propios de Catapulta, Taller de Asedio y Mercado (`unit_siege.png`,
+  `bld_siegeworkshop.png`, `bld_market.png`): Ideogram requiere
+  re-autenticación, no disponible en ninguna sesión hasta ahora. Mientras
+  tanto usan un respaldo procedural/emoji (ver `assets/ART.md`).
+
+Si se retoma el proyecto en una sesión nueva: leer `CLAUDE.md` (normas y
+listado de funcionalidades), `filemap.md` (dónde está cada cosa en
+`index.html`) y las últimas entradas de `progress.md` para el contexto
+completo antes de tocar código.
