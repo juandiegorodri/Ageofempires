@@ -337,7 +337,7 @@ verdad o del iPad.
 
 ---
 
-### FASE 8 — Rendimiento, carga y calidad final ⬜
+### FASE 8 — Rendimiento, carga y calidad final ✅
 **Alcance**
 1. **Atlas de sprites**: empaquetar los PNG en 1-2 atlas (script Node con
    Playwright/canvas, guardar `atlas.png`+`atlas.json`); `drawSprite` lee del
@@ -357,6 +357,22 @@ verdad o del iPad.
 
 **Criterios**: carga <2s en 4G simulado; fps estable; QA matrix documentada en
 `progress.md` con resultados.
+
+**Resultado (2026-07-16, PR #17)**: implementado según el alcance, con esto
+el plan maestro **F1-F8 queda completo**. Atlas de 30/34 sprites
+(`assets/atlas.png`+`.json`, 1024×2159, ~2.5MB) pre-escalados a su tamaño
+máximo real de uso (fórmula por sprite en `assets/ART.md`), con fallback a
+PNG suelto perezoso y luego emoji; verificado pixel-correcto (diferencia
+media <3/255 en 6 sprites comparados atlas-vs-suelto). Object pool para
+proyectiles y pings (retirada O(1) por intercambio con el último elemento en
+vez de `.splice()`) y `frameWalls` reutilizando el array en vez de
+`.filter()` cada cuadro. Pantalla de carga con barra de progreso + meta Open
+Graph. Estrés headless: 285 entidades → `update()+render()` ≈1.4-1.5ms/cuadro
+(presupuesto 16.7ms para 60fps, sobra ~91%); partida larga simulada (~20 min
+de juego, 72.000 cuadros con combate continuo) con heap y arrays estables
+(sin fugas). Regresión completa (un jugador + MP LAN) sin errores. Detalle
+completo, matriz QA (verificado headless / pendiente de dispositivo real) y
+el caveat de `file://`+CORS en `progress.md` (entrada 2026-07-16).
 
 ---
 
@@ -386,4 +402,4 @@ F6 Guardar+tutorial ──► F7 MP web (WebRTC) ──► F8 Rendimiento final
 | F5 Profundidad | ✅ | #14 | Líneas de mejora por Era (chevrons ▲, tier en `side.upg`, gratis en MP); Catapulta + Taller de Asedio (daño de área ×4 vs edificios, proyectil parabólico); guarnición de torres/castillo/Centro Urbano (+1 flecha/arquero guarnecido); Mercado (100 recurso ↔ 70/130 oro); pasada de balance con arena 20v20 headless (tabla arriba). Sprites de catapulta/taller/mercado pendientes de generar. Ver `progress.md` 2026-07-15. |
 | F6 Memoria+tutorial | ✅ | #15 | Guardado local en 3 ranuras + autoguardado (2min/`visibilitychange`), reutiliza `serEntity`/`serSide` sin flip de bandos, guarnición reparada aparte con ids reales; ajustes (volumen SFX/ambiente, velocidad de cámara, fps, reiniciar tutorial) persistentes; tutorial de 10 pasos por sondeo de estado real (no temporizador), saltable, no se repite; línea de tiempo (recursos+valor militar cada 30s) en el resumen. Todo deshabilitado limpiamente en MP. Ver `progress.md` 2026-07-15. |
 | F7 MP web | ✅ | #16 | Transporte abstraído (`net.sendRaw`/`net.onRaw`), transporte A=WS LAN sin cambios (regresión verificada) y B=WebRTC/PeerJS bajo demanda con código de sala de 6 caracteres; menú con pestañas Online/Red local; interpolación de posiciones en cliente (lerp por fotograma); snapshots con deltas (~79% menos bytes/s medido vs. completo); reconexión ~60s con el mismo código. PeerJS real no verificable en headless (sandbox sin egreso de red para el navegador) — código y fallback honesto verificados, conexión real pendiente de red/iPad. Ver `progress.md` 2026-07-15/16. |
-| F8 Rendimiento | ⬜ | — | |
+| F8 Rendimiento | ✅ | #17 | Atlas de sprites pre-escalado (30/34, fallback PNG suelto perezoso→emoji), pool de proyectiles/pings (retirada O(1)), `frameWalls` sin `.filter()` por cuadro, pantalla de carga con barra + meta Open Graph. Estrés 285 entidades ≈1.4-1.5ms/cuadro; partida larga (~20min simulados) con heap estable; regresión SP+MP LAN sin errores. Plan **F1-F8 completo**. Ver `progress.md` 2026-07-16. |

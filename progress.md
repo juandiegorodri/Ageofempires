@@ -993,3 +993,168 @@ Scripts en el scratchpad de la sesión (`test_a_lan.cjs` … `test_f_ui_misc.cjs
   true (el botón LAN «Crear partida» vuelve a funcionar); regresión LAN real
   (`server.js` + 2 páginas) intacta: el cliente ve 1 base propia + 1 rival, 0
   errores de consola.
+
+---
+
+## 2026-07-16 — PR #17: Fase 8 — Rendimiento, carga y calidad final
+
+Última fase del plan maestro (`PLAN.md` §4 F8). Con esto **F1-F8 quedan
+completas**. Alcance: atlas de sprites pre-escalado, object pool para
+proyectiles/pings, pantalla de carga con barra de progreso, meta Open Graph
+y una matriz QA final con cifras de rendimiento y memoria.
+
+### 1. Atlas de sprites (`assets/atlas.png` + `assets/atlas.json`)
+- Script Node (`build_atlas.cjs`, generado y ejecutado en la sesión, **no
+  forma parte del repo** — mismo criterio que `arena.cjs` de la Fase 5: es
+  una herramienta de build, no lógica del juego) que sirve el repo por HTTP
+  local (necesario para que `<canvas>` no quede "tainted" leyendo imágenes
+  locales bajo `file://`) y usa un Chromium headless para componer el atlas.
+- Empaqueta **30 de los 34** PNG de `assets/sprites/` (todos salvo las 4
+  texturas tileables `tile_grass/water/mountain/dirt`, que usan
+  `ctx.createPattern` sobre la imagen COMPLETA y se quedan sueltas a
+  propósito — meterlas en el atlas exigiría un canvas de recorte aparte para
+  no repetir el atlas entero como textura, y el ahorro sería nulo con solo 4
+  archivos cacheados una vez).
+- Cada sprite se **PRE-ESCALA** antes de empaquetarlo a la altura máxima real
+  con la que se dibuja en juego, calculada a mano a partir de las fórmulas de
+  `drawSprite(...)` (`size*escala*zoom_máx(1.6)*DPR(2)`, +15% de margen) y
+  clampada a la resolución nativa (nunca sube de resolución más allá del
+  detalle real de la fuente — p. ej. `obj_mountain`/`bld_castle`/`bld_town`
+  se copian tal cual porque lo que pediría la fórmula supera la fuente
+  nativa). Resultado: atlas de **1024×2159px, ~2.5MB** (frente a ~3.7MB en
+  30 peticiones sueltas) en un único `.png` + un `.json` de 3KB con los
+  recortes (`{w,h,frames:{nombre:{x,y,w,h}}}`).
+- `drawSprite(...)` en `index.html` prueba el atlas primero (`ctx.drawImage`
+  con recorte por las coordenadas del json); si el atlas no cargó o le falta
+  ese nombre, cae al PNG suelto de `assets/sprites/` — ahora de **carga
+  perezosa** (`ensureLooseSprite`, antes se cargaban los 34 de golpe al
+  arrancar): solo se piden por red si hace falta un respaldo. Si tampoco
+  existe, el llamador pinta el emoji de siempre (sin cambios).
+- **Guardarraíl importante** (encontrado en las pruebas, ver más abajo):
+  `ensureLooseSprite` solo intenta la red si el nombre está en
+  `SPRITE_FILES`/`SPRITE_SET`; para nombres sin PNG registrado (los
+  edificios `bld_market`/`bld_siegeworkshop` de la Fase 5, que usan emoji a
+  propósito porque Ideogram no estaba disponible esa sesión) devuelve un
+  registro fijo sin disparar ninguna petición — si no, la carga perezosa
+  habría reintroducido justo el 404/`console.error` que la Fase 5 evitó
+  registrando esos nombres fuera de `SPRITE_FILES`.
+- `vercel.json`: nueva regla de caché `immutable` para `/assets/atlas.(png|json)`
+  (mismo criterio que `/assets/sprites/`). `.vercelignore` no necesitó
+  cambios (no excluye `assets/atlas.*`).
+
+### 2. Pre-escalado
+Ver punto 1: el pre-escalado y el atlas se resolvieron juntos (el atlas ES
+la versión pre-escalada). Para el camino de respaldo (PNG suelto, poco
+frecuente) se mantiene el reescalado directo de siempre — es la rama menos
+transitada, no merecía la pena duplicar la lógica de pre-escalado ahí.
+
+### 3. GC y allocs
+- **Object pool** para `projectiles` (`_projPool`/`allocProjectile`/
+  `freeProjectile`) y `pings` (`_pingPool`): en vez de `push({...})` con un
+  objeto nuevo en cada disparo/ping, se reutiliza uno ya "muerto" del pool
+  (o se crea uno solo si el pool está vacío). `updateProjectiles`/`drawPings`
+  ya no usan `.splice(i,1)` (O(n), desplaza el resto del array) sino un
+  intercambio con el último elemento + `.pop()` (O(1); válido porque no hay
+  dependencia de orden entre proyectiles/pings — ver razonamiento en
+  `filemap.md` §9.5) y devuelven el objeto liberado al pool.
+- `update()` ya no recalcula `frameWalls = entities.filter(...)` (un array
+  nuevo cada cuadro) sino que reutiliza el array existente (`.length=0` +
+  `push` manual).
+- Comportamiento observable **idéntico** en ambos casos (mismos campos,
+  mismos proyectiles/pings vistos en pantalla); no toca la simulación ni el
+  protocolo MP (el cliente reconstruye su propio `projectiles` a partir del
+  snapshot con `.map()`, sin pool, sin cambios).
+
+### 4. Pantalla de carga + meta compartir
+- Overlay `#loadScreen` (barra `#loadBarFill` + `#loadPct`, z-index 60, por
+  encima de todo) visible hasta que `bootLoad()` decide que ya se puede
+  jugar: si el atlas carga, salta casi al 100% de inmediato (1 imagen + 1
+  json); si falla, pide TODOS los PNG sueltos de golpe (no perezosos, para
+  que la barra tenga sentido) y sondea su progreso real cada 80ms. Tope de
+  seguridad `LOAD_MAX_MS=4000` para que un fallo de red nunca deje al
+  jugador atascado. El "audio" no tiene archivos que cargar (WebAudio
+  sintetizado desde la Fase 1); el `AudioContext` real solo puede arrancar
+  tras el primer toque (regla de Safari/iOS, sin cambios) — ocupa una
+  fracción simbólica de la barra, con honestidad, en vez de fingir una carga
+  que no existe.
+- `<link rel="preload" as="image" href="assets/atlas.png">` (se retiró un
+  preload equivalente para `atlas.json` con `as="fetch"`: bajo `file://`
+  dispara su propio aviso de red por CORS incluso sin que el JS llegue a
+  usarlo, y el archivo es demasiado pequeño —3KB— para que precargarlo
+  aporte algo real).
+- Meta Open Graph/Twitter Card (`og:title`/`og:description`/`og:image`,
+  `twitter:*`) para que compartir el enlace del juego muestre una vista
+  previa decente.
+
+### 5. Matriz QA final
+
+| Área | Verificado headless (Chromium) | Pendiente de dispositivo real |
+|---|---|---|
+| Carga con atlas (servido por HTTP) | ✅ 0 errores, `atlasReady=true`, 30 frames, menú y partida visibles con sprites | — |
+| Carga con atlas bajo `file://` | ✅ 0 errores — se salta el intento de red a propósito (ver caveat) y cae a PNG suelto | — |
+| Atlas pixel-correcto (6 sprites) | ✅ diferencia media <3/255 por canal vs. PNG suelto al mismo tamaño destino | — |
+| Fallback si el atlas no carga (renombrado) | ✅ `atlasFailed=true`, cae a PNG suelto, juego funcional, captura visual idéntica | — |
+| Rendimiento (285 entidades) | ✅ `update()+render()` ≈1.4-1.5ms/cuadro | Framerate real en Safari/iPad (motor JS y compositor distintos de Chromium) |
+| Memoria (partida larga, ~20min simulados) | ✅ heap y arrays estables, sin fugas | Uso de memoria real prolongado en un iPad con RAM limitada |
+| Regresión de un jugador (construir/era/línea/guarnición/asedio/mercado) | ✅ 0 errores, todas las comprobaciones pasan | — |
+| Niebla/minimapa | ✅ base propia explorada, punto lejano no explorado | — |
+| Guardar→recargar→cargar | ✅ `page.reload()` real + `localStorage`, entidades/recursos/edad coinciden | — |
+| Multijugador LAN (`server.js` + 2 páginas) | ✅ 0 errores, cliente ve 1 base propia + 1 rival | Reconexión/latencia en una red Wi-Fi real con más de un salto |
+| iPad Safari real (táctil, gestos, Retina) | — | **Pendiente** (sin dispositivo en este entorno) |
+| iPhone (pantalla pequeña, ¿jugable?) | — | **Pendiente** |
+| Modo PWA instalado (icono, standalone) | — | **Pendiente** |
+| Rotación de pantalla física | — | **Pendiente** (el `resize()` responde a `window.innerWidth/Height`, pero el evento real de rotación de iOS no es reproducible headless) |
+| Multitarea real (`visibilitychange` en Safari) | Parcial: el listener y `autosave()` ya se ejercitan en la Fase 6 con `document.hidden` simulado | Comportamiento exacto de Safari/iPadOS al perder foco (congelado por el SO, no solo el evento DOM) |
+| Chrome/Firefox de escritorio | ✅ (Chromium headless cubre Chrome; Firefox no disponible en este entorno) | Firefox de escritorio real |
+
+### 6. Cifras de rendimiento y memoria (medidas, no estimadas)
+- **Estrés, 285 entidades** (100 unidades de ambos bandos, 20 edificios, 110
+  recursos): 300 ciclos de `update(1/60)+render()` tras 30 de calentamiento →
+  **462ms totales → 1.44-1.54ms/cuadro** (dos corridas), muy por debajo del
+  presupuesto de 16.7ms para 60fps (~91% de margen).
+- **Partida larga simulada** (72.000 cuadros = 60fps×60s×20min, con
+  `update()+render()` en cada uno y disparos/pings sintéticos cada 5 cuadros
+  para ejercitar el pool bajo carga sostenida): `performance.memory
+  .usedJSHeapSize` pasó de **~4.3MB a ~4.6MB** (+6%, dentro del ±10% pedido,
+  osciló entre esos valores sin tendencia monótona); `entities` bajó de 285
+  a ~185 (bajas por el combate simulado, no una fuga: los ejércitos
+  sintéticos se enfrentaron sin economía real); `pings` vivos se mantuvo
+  acotado (120-180, nunca creciendo sin límite) y su pool se estabilizó en
+  ~56 objetos reutilizables; `projectiles` vivos volvió a 0 en reposo con el
+  pool estable en 80. Nada de esto se pudo observar en la primera versión
+  del test porque **no llamaba a `render()`** dentro del bucle largo (solo
+  `update()`) — sin `render()`, `drawPings()`/`drawCorpses()` (que podan y
+  devuelven al pool) nunca corren, así que los arrays sí habrían crecido sin
+  límite; corregido antes de dar la prueba por buena, ver caveat abajo.
+
+### Caveats honestos
+- **`file://` y `fetch()`**: Chromium bloquea `fetch()`/`XMLHttpRequest` a
+  recursos locales por CORS (origen "null"), y lo registra como
+  `console.error` de red **aunque el rechazo de la promesa se capture bien
+  en JS** — no hay forma de evitar ese aviso desde el código de la página.
+  Como el juego servido de verdad (GitHub Pages/Vercel) siempre es http(s),
+  donde `fetch()` funciona sin problema, `loadAtlas()` detecta
+  `location.protocol==='file:'` y se salta el intento de red a propósito,
+  cayendo directo al PNG suelto — mismo comportamiento observable que un
+  fallo real, sin el aviso inevitable. Esto significa que la ruta del atlas
+  en sí **no se ejercita** al abrir `index.html` a mano (doble clic) ni bajo
+  `file://`; para probarla de verdad (como se hizo aquí) hace falta servir
+  el repo por http(s) — la pantalla de "Prueba gráfica" y las pruebas de
+  Fases 1-7 ya usaban `file://`, así que se documenta este matiz nuevo con
+  honestidad en vez de ocultarlo.
+- El primer intento del test de "partida larga" no llamaba a `render()`
+  dentro del bucle de 72.000 cuadros, así que no probaba de verdad la poda
+  de `pings`/`corpses` ni el retorno al pool (ver punto 6); se corrigió
+  antes de reportar cifras. Se deja constancia porque es exactamente el
+  tipo de error que un test de rendimiento mal planteado puede esconder.
+- El test de fallback (atlas renombrado temporalmente) genera, como es
+  esperable, un `console.error` de red por el 404 real de `atlas.png` — se
+  documenta como parte de la categoría ya aceptada en la Fase 5 ("un asset
+  deliberadamente ausente para simular un escenario real produce su propio
+  aviso de red, distinto de un bug del motor"); el archivo se restaura
+  siempre en un `finally` del script de prueba.
+- La matriz QA dedicada a iPad/iPhone/PWA/rotación/multitarea real **no se
+  pudo verificar en este entorno** (sin dispositivo físico ni Safari real);
+  se marca pendiente con honestidad en la tabla del punto 5, siguiendo la
+  misma norma que las Fases 6 y 7 aplicaron a sus propios límites de
+  entorno.

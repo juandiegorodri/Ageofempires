@@ -10,10 +10,25 @@
 <meta name="theme-color" content="#0e0f12">
 <meta name="description" content="Mini-AoE: Age of Empires ultra básico para jugar con pantalla táctil desde el navegador del iPad.">
 <meta name="format-detection" content="telephone=no">
+<!-- Open Graph / compartir enlace (Fase 8) -->
+<meta property="og:title" content="Mini-AoE ⚔️">
+<meta property="og:description" content="Age of Empires ultra básico para jugar con pantalla táctil desde el navegador del iPad. Un solo index.html, sin instalación.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="assets/icon-512.png">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Mini-AoE ⚔️">
+<meta name="twitter:description" content="Age of Empires ultra básico, táctil, en el navegador.">
+<meta name="twitter:image" content="assets/icon-512.png">
 <title>Mini-AoE ⚔️</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <link rel="icon" type="image/png" href="assets/icon-180.png">
+<!-- Precarga del atlas de sprites (Fase 8): una sola textura en vez de 34 PNG
+     sueltos. Solo la imagen (as=fetch para el .json dispara una comprobación
+     CORS que Chromium bloquea bajo file:// con un console.error de red aunque
+     el `fetch()` real de `loadAtlas()` ya se salte esa ruta a propósito —
+     ver esa función —, así que no merece la pena precargarlo). -->
+<link rel="preload" as="image" href="assets/atlas.png">
 <style>
   :root{
     --bg:#0e0f12; --panel:#16181d; --panel2:#1f232b; --line:#2c313b;
@@ -146,6 +161,14 @@
   #fpsHud{ position:fixed; left:8px; top:52px; z-index:9; font-size:11px; color:#8fdc8f; background:#000a;
     padding:2px 6px; border-radius:6px; pointer-events:none; font-family:monospace; }
   #fpsHud.hidden{ display:none; }
+  /* Pantalla de carga (Fase 8): barra de progreso de assets (sprites+audio) */
+  #loadScreen{ z-index:60; }
+  #loadScreen .card{ width:min(360px,88vw); }
+  #loadBarWrap{ width:100%; height:14px; border-radius:7px; background:#0c0d10;
+    border:1px solid var(--line); overflow:hidden; margin:14px 0 8px; }
+  #loadBarFill{ height:100%; width:0%; background:linear-gradient(90deg,var(--accent),#e6c34a);
+    transition:width .15s ease-out; }
+  #loadPct{ font-size:12px; color:var(--muted); }
 </style>
 </head>
 <body>
@@ -191,6 +214,18 @@
 
 <div id="actions">
   <div id="selinfo">Toca una unidad o edificio para empezar. Arrastra con un dedo para seleccionar; usa dos dedos para mover la cámara.</div>
+</div>
+
+<!-- Pantalla de carga (Fase 8): visible hasta que el atlas/sprites (y el arranque
+     de audio) estén listos; siempre se oculta sola (con tope de tiempo) para
+     no bloquear el juego si algún asset falla. -->
+<div id="loadScreen" class="overlay">
+  <div class="card">
+    <h1>Mini-AoE ⚔️</h1>
+    <p>Cargando gráficos…</p>
+    <div id="loadBarWrap"><div id="loadBarFill"></div></div>
+    <div id="loadPct">0%</div>
+  </div>
 </div>
 
 <!-- Pantalla de inicio / menú principal -->
@@ -585,11 +620,22 @@ const enemy  = { res:{food:300, wood:300, gold:200, stone:200}, age:1, mods:fres
   stats:freshStats(), ai:{ timer:0, attackTimer:0 } };
 
 let bridge = null;          // {x0,x1,y0,y1} hueco transitable del río (puente)
-let frameWalls = [];        // murallas construidas (recalculado cada frame)
+let frameWalls = [];        // murallas construidas (recalculado cada frame, reutilizando el array)
 let pings = [];             // efectos de selección/deselección
 let projectiles = [];       // flechas en vuelo (arqueros, héroe arco, torres, castillo)
 let corpses = [];           // cadáveres visuales (fade + caída), fuera de `entities`
 const unitFace = new Map(); // id → {x,y,face,walking}: animación procedural (bamboleo/volteo)
+// --- Object pools (Fase 8): evitan crear un objeto nuevo por cada disparo o
+// ping (que en combates grandes son decenas por segundo) reutilizando los
+// objetos ya "muertos" en vez de dejarlos para el recolector de basura. El
+// comportamiento observable es idéntico (mismos campos, mismos valores); solo
+// cambia de dónde sale el objeto. No afecta a la simulación ni al protocolo
+// MP (el cliente reconstruye sus propios `projectiles` a partir del snapshot,
+// sin pool, ver `applySnap`).
+const _projPool = [];
+function allocProjectile(){ return _projPool.pop() || {}; }
+function freeProjectile(p){ _projPool.push(p); }
+const _pingPool = [];
 let alertFlags = { player:false, enemy:false };  // "me atacan" pendiente de sonido/snapshot
 
 // Niebla de guerra (SOLO render/cliente: no afecta la simulación ni a la IA,
@@ -612,9 +658,29 @@ let lastAlert = null;       // {x,y,t} última zona atacada (para el botón ⚔�
 
 function side(owner){ return owner==='player'?player:enemy; }
 
-// ---------- Sprites gráficos (assets/sprites/*.png) ----------
+// ---------- Sprites gráficos (assets/sprites/*.png + atlas, Fase 8) ----------
 // Nombres = res_<recurso>, unit_<tipo>, bld_<edificio>. Si un sprite no carga,
 // el motor usa el emoji de respaldo, así el juego nunca se rompe.
+//
+// Camino de carga (de más a menos rápido):
+//  1. ATLAS (`assets/atlas.png`+`assets/atlas.json`, generado por el script
+//     `build_atlas.cjs` de la sesión, no forma parte del repo): una única
+//     textura con cada sprite YA PRE-ESCALADO a su tamaño máximo real de uso
+//     en juego (×2 para Retina, ver tabla de cálculo en `progress.md`), así
+//     que además de ahorrar peticiones de red (1 en vez de 30), `drawImage`
+//     nunca tiene que reescalar desde una fuente de ~400px hasta los ~30-70px
+//     con que se dibuja cada unidad/edificio en pantalla.
+//  2. PNG SUELTO de `assets/sprites/` — solo si el atlas no cargó o le falta
+//     ese sprite concreto. Carga PEREZOSA (bajo demanda, `ensureLooseSprite`):
+//     si el atlas funciona (caso normal) nunca se piden estos 30 archivos por
+//     red, solo se disparan si hace falta un respaldo.
+//  3. Emoji de respaldo (sin cambios de fases anteriores): lo pinta el
+//     LLAMADOR cuando `drawSprite(...)` devuelve `false`.
+// Las 4 texturas `tile_*` (suelo/agua/roca, usadas con `ctx.createPattern`)
+// se quedan FUERA del atlas a propósito: un patrón necesita la imagen COMPLETA
+// como fuente, y recortarlas de un atlas exigiría un canvas de recorte aparte
+// por textura; con solo 4 archivos de 256×256 cacheados una vez el ahorro
+// sería nulo frente al riesgo de un patrón mal recortado.
 const SPRITE_FILES = [
   'res_food','res_wood','res_gold','res_stone',
   'unit_villager','unit_infantry','unit_pike','unit_archer','unit_cavalry',
@@ -628,21 +694,74 @@ const SPRITE_FILES = [
   // evitar peticiones 404 (que Chromium reporta como console.error); cuando
   // se generen los PNG, añadir 'unit_siege','bld_siegeworkshop','bld_market'.
 ];
-const sprites = {};
-let spritesReady = 0;
-function loadSprites(){
-  for(const n of SPRITE_FILES){
-    const img = new Image(); const rec = { img, ready:false };
-    img.onload = ()=>{ rec.ready=true; spritesReady++; };
-    img.onerror = ()=>{};
-    img.src = 'assets/sprites/'+n+'.png';
-    sprites[n] = rec;
-  }
+const SPRITE_SET = new Set(SPRITE_FILES);   // para no pedir por red nombres no registrados (p.ej. bld_market/bld_siegeworkshop, Fase 5: sin PNG, solo emoji)
+const sprites = {};       // PNG sueltos cargados (perezoso): sprites[name] = {img, ready}
+let spritesReady = 0;     // cuántos PNG sueltos han terminado de cargar
+let atlasImg = null, atlasFrames = null, atlasReady = false, atlasFailed = false;
+const _noSprite = { img:null, ready:false };   // registro fijo para nombres no registrados: nunca dispara una petición
+// Carga el PNG suelto de `name` la primera vez que se pide (no antes). Se
+// dispara desde `spr()`, tanto para el respaldo del atlas como para las
+// texturas `tile_*` (patrones) y desde la pantalla de "Prueba gráfica". Si
+// `name` no está en `SPRITE_FILES` (p.ej. edificios de la Fase 5 sin sprite
+// generado todavía) NUNCA pide nada por red — así se evita el 404/
+// console.error que rompería la regla de "cero errores" de `CLAUDE.md` §4;
+// esos casos siempre caen al emoji de respaldo.
+function ensureLooseSprite(name){
+  let rec = sprites[name];
+  if(rec) return rec;
+  if(!SPRITE_SET.has(name)) return _noSprite;
+  const img = new Image();
+  rec = { img, ready:false };
+  img.onload = ()=>{ rec.ready=true; spritesReady++; };
+  img.onerror = ()=>{};
+  img.src = 'assets/sprites/'+name+'.png';
+  sprites[name] = rec;
+  return rec;
 }
-function spr(name){ const r=sprites[name]; return (r&&r.ready)?r.img : null; }
+function spr(name){ const r=ensureLooseSprite(name); return r.ready?r.img:null; }
+// Carga el atlas (imagen + json de recortes). `cb(ok)` se llama una sola vez
+// cuando se sabe si quedó listo o si hay que apoyarse en los PNG sueltos.
+// Nota `file://`: Chromium bloquea `fetch()`/`XMLHttpRequest` a recursos
+// locales por CORS (origen "null"), y lo registra como `console.error` de red
+// AUNQUE el rechazo de la promesa se capture bien en JS (no hay forma de
+// evitar ese log desde el código de la página). El juego servido de verdad
+// (GitHub Pages/Vercel) siempre es http(s), donde `fetch()` funciona sin
+// problema; `file://` solo se usa al abrir `index.html` a mano o en algunas
+// pruebas locales. Para no ensuciar la consola en ese caso (regla de "cero
+// errores" de `CLAUDE.md` §4), nos saltamos el intento de red bajo `file:` y
+// vamos directos al respaldo de PNG sueltos — comportamiento observable
+// idéntico (cae al mismo camino que si el atlas fallara), solo evita el
+// aviso de red inevitable del navegador.
+function loadAtlas(cb){
+  if(location.protocol === 'file:'){ atlasFailed = true; cb(false); return; }
+  let jsonOk=false, imgOk=false, failed=false, called=false;
+  function done(){
+    if(called) return;
+    if(failed){ called=true; atlasFailed=true; cb(false); return; }
+    if(jsonOk && imgOk){ called=true; atlasReady=true; cb(true); }
+  }
+  fetch('assets/atlas.json').then(r=>{ if(!r.ok) throw new Error('atlas.json '+r.status); return r.json(); })
+    .then(j=>{ atlasFrames = j.frames; jsonOk=true; done(); })
+    .catch(()=>{ failed=true; done(); });
+  const img = new Image();
+  img.onload = ()=>{ imgOk=true; done(); };
+  img.onerror = ()=>{ failed=true; done(); };
+  img.src = 'assets/atlas.png';
+  atlasImg = img;
+}
 // Dibuja un sprite centrado en (cx,cy) escalado a una altura objetivo.
 // anchorBottom: ancla la base del sprite en cy (para que "pise" el suelo).
+// Atlas primero (recorte por coordenadas de `atlasFrames`); si no está listo
+// o no tiene ese nombre, cae al PNG suelto (perezoso); si tampoco existe,
+// devuelve false y el llamador dibuja el emoji de respaldo.
 function drawSprite(name, cx, cy, targetH, anchorBottom){
+  if(atlasReady && atlasFrames && atlasFrames[name]){
+    const f = atlasFrames[name];
+    const sc = targetH/f.h, w = f.w*sc, h = targetH;
+    const dy = anchorBottom ? (cy - h) : (cy - h/2);
+    ctx.drawImage(atlasImg, f.x, f.y, f.w, f.h, cx - w/2, dy, w, h);
+    return true;
+  }
   const img = spr(name); if(!img) return false;
   const sc = targetH/img.naturalHeight, w = img.naturalWidth*sc, h = targetH;
   const dy = anchorBottom ? (cy - h) : (cy - h/2);
@@ -2138,8 +2257,10 @@ function fireProjectile(attacker, target, dmg, kind){
   const d = dist(attacker, target) || 1;
   const spd = kind==='siege' ? 170 : 300;
   const dur = Math.max(0.05, d/spd);
-  projectiles.push({ id:nextShotId++, x0:attacker.x, y0:attacker.y, x1:target.x, y1:target.y, t:0, dur, dmg,
-    aId:attacker.id, tId:target.id, owner:attacker.owner, kind:kind||'arrow' });
+  const p = allocProjectile();
+  p.id=nextShotId++; p.x0=attacker.x; p.y0=attacker.y; p.x1=target.x; p.y1=target.y;
+  p.t=0; p.dur=dur; p.dmg=dmg; p.aId=attacker.id; p.tId=target.id; p.owner=attacker.owner; p.kind=kind||'arrow';
+  projectiles.push(p);
   attacker.anim = 0.25;
   playSfx(kind==='siege' ? 'mine' : 'arrow');
 }
@@ -2162,7 +2283,12 @@ function updateProjectiles(dt){
           }
         }
       }
-      projectiles.splice(i,1);
+      // swap-pop en vez de splice: O(1) en lugar de O(n) (el orden entre
+      // proyectiles no importa, son independientes); el objeto vuelve al pool.
+      const last = projectiles.length-1;
+      if(i!==last) projectiles[i] = projectiles[last];
+      projectiles.pop();
+      freeProjectile(p);
     }
   }
 }
@@ -2489,8 +2615,11 @@ function cancelQueued(b, idx){
 }
 
 function update(dt){
-  // Murallas construidas (para colisión de movimiento de este frame)
-  frameWalls = entities.filter(e=>e.kind==='building'&&BLD[e.btype].wall&&e.built);
+  // Murallas construidas (para colisión de movimiento de este frame). Reusa
+  // el array (`.length=0` + `push`) en vez de `.filter()` para no crear un
+  // array nuevo cada frame (Fase 8: menos presión sobre el GC).
+  frameWalls.length = 0;
+  for(const e of entities){ if(e.kind==='building' && BLD[e.btype].wall && e.built) frameWalls.push(e); }
   // Proyectiles en vuelo de este frame (disparados el frame anterior)
   updateProjectiles(dt);
   // Unidades
@@ -3686,7 +3815,11 @@ function drawSelBox(cx, cy, hw, hh){
   }
 }
 // --- Efectos de selección/deselección (pings) ---
-function addPing(x, y, grow, color){ pings.push({x, y, grow, color:color||'#ffe08c', t0:performance.now()}); }
+function addPing(x, y, grow, color){
+  const p = _pingPool.pop() || {};
+  p.x=x; p.y=y; p.grow=grow; p.color=color||'#ffe08c'; p.t0=performance.now();
+  pings.push(p);
+}
 function pingEntities(ids, grow){
   for(const id of ids){ const e=find(id); if(e) addPing(e.x, e.y, grow); }
 }
@@ -3694,7 +3827,13 @@ function drawPings(){
   const now=performance.now();
   for(let i=pings.length-1;i>=0;i--){
     const pg=pings[i], age=(now-pg.t0)/350;
-    if(age>=1){ pings.splice(i,1); continue; }
+    if(age>=1){
+      const last=pings.length-1;
+      if(i!==last) pings[i]=pings[last];
+      pings.pop();
+      _pingPool.push(pg);
+      continue;
+    }
     const s=worldToScreen(pg.x, pg.y);
     const r=(pg.grow ? (8+age*26) : (30-age*22))*cam.zoom;
     ctx.save(); ctx.translate(s.x, s.y+6*cam.zoom); ctx.scale(1,0.5);
@@ -4708,8 +4847,52 @@ applySettingsToUI();
 // ---------- Fase 6: tutorial guiado (botón «Saltar») ----------
 document.getElementById('btnTutSkip').addEventListener('click', tutorialSkip);
 
-// ---------- Arranque ----------
-loadSprites();
+// ---------- Arranque + pantalla de carga (Fase 8) ----------
+// Barra de progreso sobre los assets gráficos: camino feliz = atlas (1
+// imagen + 1 json); si falla, recae en los ~30 PNG sueltos y sondea su
+// progreso. El "audio" no tiene archivos que descargar (WebAudio sintetizado,
+// Fase 1) y el `AudioContext` real solo puede arrancar tras el primer toque
+// (política de Safari/iOS, `ensureAudio`) — por eso aquí solo ocupa una
+// fracción simbólica de la barra, sin bloquear nada. Tope de tiempo
+// (`LOAD_MAX_MS`) para que un fallo de red nunca deje al jugador atascado en
+// la pantalla de carga.
+const LOAD_MAX_MS = 4000;
+function setLoadProgress(frac){
+  const fill=document.getElementById('loadBarFill'), pct=document.getElementById('loadPct');
+  const p = Math.round(clamp(frac,0,1)*100);
+  if(fill) fill.style.width = p+'%';
+  if(pct) pct.textContent = p+'%';
+}
+function hideLoadScreen(){
+  const el = document.getElementById('loadScreen');
+  if(el) el.classList.add('hidden');
+}
+function bootLoad(){
+  let finished = false, pollHandle = null;
+  function finish(){
+    if(finished) return; finished = true;
+    if(pollHandle) clearInterval(pollHandle);
+    setLoadProgress(1);
+    hideLoadScreen();
+  }
+  setLoadProgress(0.05);
+  loadAtlas((ok)=>{
+    if(finished) return;
+    if(ok){ setLoadProgress(0.95); finish(); return; }
+    // Atlas no disponible: recae en los PNG sueltos (los pedimos todos ahora,
+    // en vez de perezosos, para que la barra tenga sentido y el juego
+    // arranque con los sprites ya listos en vez de ir apareciendo en marcha).
+    for(const n of SPRITE_FILES) ensureLooseSprite(n);
+    const total = SPRITE_FILES.length;
+    pollHandle = setInterval(()=>{
+      const done = SPRITE_FILES.filter(n=> sprites[n] && sprites[n].ready).length;
+      setLoadProgress(0.1 + 0.85*(done/total));
+      if(done>=total) finish();
+    }, 80);
+  });
+  setTimeout(finish, LOAD_MAX_MS);
+}
+bootLoad();
 resize();
 requestAnimationFrame(loop);
 </script>

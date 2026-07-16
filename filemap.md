@@ -15,8 +15,9 @@ código nuevas (ver normas en `CLAUDE.md`).
 | `README.md` | Cómo jugar, controles y cómo desplegar. |
 | `assets/ART.md` | Manual de línea gráfica y lista de sprites/animaciones. |
 | `assets/sprites/*.png` | Sprites finales del juego (unidades, edificios, recursos). |
+| `assets/atlas.png` / `atlas.json` | Atlas de sprites (Fase 8): 30 de los 34 PNG de `assets/sprites/` empaquetados y PRE-ESCALADOS en una sola textura + su mapa de recortes, para menos peticiones y menos reescalado por cuadro. Generado por un script Node de la sesión (`build_atlas.cjs`, no forma parte del repo, igual criterio que `arena.cjs` de la Fase 5); regenerar si cambian los PNG de origen. Ver `assets/ART.md`. |
 | `assets/_raw/*.webp` | Hojas fuente generadas con Ideogram (para re-recortar). |
-| `vercel.json` | Config de despliegue estático en Vercel (caché de sprites, headers). |
+| `vercel.json` | Config de despliegue estático en Vercel (caché de sprites y del atlas, headers). |
 | `.vercelignore` | Excluye del deploy web `ios/`, `server.js`, `assets/_raw/` y los `.md`. |
 | `manifest.webmanifest` | Web App Manifest (PWA: nombre, iconos, pantalla completa). |
 | `assets/icon-180.png` / `icon-512.png` | Iconos de la app (apple-touch-icon / manifest). |
@@ -55,12 +56,28 @@ El archivo se organiza en estas secciones (en orden de aparición):
 2. **Estado global**: `cam`, `entities`, `selection`, `player`, `enemy`
    (con `mods.resMult` y `stats`), `gameSpeed`, `mapTheme`, `terrain`, `bridge`,
    flags (`running`, `paused`, `gameOver`, `difficulty`).
-2.5. **Sprites gráficos**: `SPRITE_FILES`, `sprites`, `loadSprites`, `spr`,
-   `drawSprite` (PNG escalado con respaldo de emoji), `drawShadow`,
+2.5. **Sprites gráficos** (Fase 8: atlas + pre-escalado + carga perezosa,
+   sustituye el `loadSprites()` eager de fases anteriores): `SPRITE_FILES`
+   (lista de los 34 nombres válidos), `SPRITE_SET` (el mismo conjunto, para
+   comprobar en O(1) si un nombre tiene PNG real antes de pedirlo — evita
+   404 para edificios sin sprite aún, como `bld_market`/`bld_siegeworkshop`
+   de la Fase 5, que usan emoji), `sprites`/`ensureLooseSprite`/`spr` (PNG
+   sueltos de `assets/sprites/`, carga PEREZOSA: solo se piden por red si el
+   atlas falla o no tiene ese sprite), `atlasImg`/`atlasFrames`/`atlasReady`/
+   `atlasFailed`/`loadAtlas` (carga `assets/atlas.png`+`assets/atlas.json` —
+   un atlas con cada sprite ya PRE-ESCALADO a su tamaño máximo real de uso
+   en juego, ver `assets/ART.md`; bajo `file:` se salta el intento de red a
+   propósito, ver comentario en el propio `loadAtlas`, porque Chromium
+   bloquea `fetch()` local por CORS y lo registra como `console.error`
+   aunque el fallo se capture bien), `drawSprite` (atlas primero con recorte
+   por coordenadas → PNG suelto perezoso → `false`, y el llamador pinta el
+   emoji de respaldo), `drawShadow`,
    `setUnitTransform`/`resetTransform` (transform local barato para la
    animación de unidades, sin `save/restore`), y patrones de textura
-   `getPattern`/`fillPattern` (suelo/agua/roca). Selección animada
-   (`drawSelBox`/`drawSelRing`) y efectos `pings`. Murallas: `WALL_SP`,
+   `getPattern`/`fillPattern` (suelo/agua/roca; las 4 texturas `tile_*` se
+   quedan FUERA del atlas a propósito, ver `assets/ART.md`). Selección
+   animada (`drawSelBox`/`drawSelRing`) y efectos `pings` (con pool, ver
+   9.5). Murallas: `WALL_SP`,
    `WALL_TOWER_EVERY`, `wallSegmentType(pts,i)` (Fase 4: decide si el tramo `i`
    es muro/torre/**Puerta** — el tramo central de una línea de ≥3 tramos),
    `wallTap`/`wallPoints`, colisión `blockedByWall`/`wallBlocksSide`
@@ -228,6 +245,20 @@ El archivo se organiza en estas secciones (en orden de aparición):
    también `unitFace`, quita al muerto de `controlGroups` e invalida el grid
    de A* si era una muralla/puerta — Fase 4), `enemyAI` + `DOCTRINE` (3
    manuales) y `pickWaveTarget` (objetivo estratégico).
+9.5. **Object pools y GC** (Fase 8, bloque junto a la declaración de
+   `pings`/`projectiles`): `_projPool`/`allocProjectile`/`freeProjectile` y
+   `_pingPool` reutilizan objetos "muertos" en vez de crear uno nuevo por
+   cada disparo (`fireProjectile`) o ping (`addPing`) — en combates grandes
+   son decenas por segundo. `updateProjectiles`/`drawPings` ya no usan
+   `.splice()` (O(n), desplaza el array) sino un intercambio con el último
+   elemento + `.pop()` (O(1); válido porque el orden entre proyectiles/pings
+   no importa) y devuelven el objeto liberado al pool correspondiente.
+   `update()` tampoco recalcula `frameWalls` con `entities.filter(...)` (un
+   array nuevo cada cuadro) sino reutilizando el array (`length=0` + `push`).
+   Puramente de render/simulación LOCAL: no cambia el protocolo MP (el
+   cliente reconstruye su propio `projectiles` a partir del snapshot vía
+   `.map()`, sin pool, en `applySnap`) ni el comportamiento observable
+   (mismos proyectiles/pings, mismos campos).
 10. **Render**: `render` (culling `onScreen` + filtro de niebla `fogRenderOk`,
     y `drawFogOverlay` al final de la escena — ver 2.55.5), `drawTerrain`
     (río/puente/riscos), `drawGround`, `drawCorpses` (cadáveres: fade + caída,
@@ -279,12 +310,24 @@ El archivo se organiza en estas secciones (en orden de aparición):
     `showHint`, `endGame` y `renderSummary` (tabla del resumen final; Fase 6:
     también llama a `drawTimelineChart`).
 14. **Menú principal y arranque**: `MAP_DESC`, `refreshMenu` y listeners de las
-    opciones del menú; botón Empezar; **prueba gráfica** (`openGfxTest` + botón);
-    listeners de fin/centrar (doble toque → `lastAlert`, Fase 3)/pausa/inactivos/
-    ejército (`#btnArmy`)/grupos de control (`#btnGrp1-3`); bloqueo de gestos
-    del navegador; refresco periódico del panel; listeners de guardado/ajustes/
-    tutorial (Fase 6, ver 15-17); `loadSprites()` + `resize()` +
-    `requestAnimationFrame(loop)`.
+    opciones del menú; botón Empezar; **prueba gráfica** (`openGfxTest` + botón,
+    usa `<img>` directos sobre los 34 nombres de `SPRITE_FILES`, no pasa por el
+    atlas); listeners de fin/centrar (doble toque → `lastAlert`, Fase 3)/pausa/
+    inactivos/ejército (`#btnArmy`)/grupos de control (`#btnGrp1-3`); bloqueo de
+    gestos del navegador; refresco periódico del panel; listeners de
+    guardado/ajustes/tutorial (Fase 6, ver 15-17). **Arranque + pantalla de
+    carga** (Fase 8, bloque `Arranque + pantalla de carga`, overlay
+    `#loadScreen` con barra `#loadBarFill`/`#loadPct`, z-index por encima del
+    resto para que tape el menú hasta estar listo): `bootLoad` llama a
+    `loadAtlas` — si el atlas carga, la barra salta casi al 100% de una vez
+    (1 sola imagen+json); si falla, pide TODOS los PNG sueltos de golpe (en
+    vez de perezosos) y sondea su progreso real cada 80ms hasta que estén
+    todos listos — y `setLoadProgress`/`hideLoadScreen`; `LOAD_MAX_MS` (4s)
+    es un tope de seguridad para que un fallo de red nunca deje al jugador
+    atascado en la carga. El "audio" no ocupa tiempo real de carga (WebAudio
+    sintetizado, sin archivos; el `AudioContext` de verdad solo arranca tras
+    el primer toque, ver 2.55) — solo una fracción simbólica de la barra.
+    Termina con `resize()` + `requestAnimationFrame(loop)`.
 15. **Guardado local** (Fase 6, un solo jugador, bloque `GUARDADO LOCAL`
     justo después de `hostWall` — reutiliza `serEntity`/`deserEntity`/
     `serSide` del bloque MP de arriba): `SAVE_VERSION`/`SAVE_SLOT_KEY`/
