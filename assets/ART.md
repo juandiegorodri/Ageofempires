@@ -138,6 +138,43 @@ nombre correspondiente a `SPRITE_FILES` en `index.html`:
 | Taller de Asedio | `bld_siegeworkshop.png` | 🏭 | cobertizo abierto con vigas de madera, similar tamaño a Cuartel |
 | Mercado | `bld_market.png` | 🏪 | toldo/puesto con mercancías apiladas, distinto de Casa/Granja |
 
+### Atlas de sprites (Fase 8, PR #17)
+Para reducir peticiones de red y el coste de reescalar sprites cada cuadro, 30
+de los 34 PNG de `assets/sprites/` (todos salvo las 4 texturas tileables
+`tile_*`, que se quedan sueltas — ver más abajo) se empaquetan en
+`assets/atlas.png` + `assets/atlas.json` mediante un script Node
+(`build_atlas.cjs`, generado y ejecutado en la sesión, **no forma parte del
+repo** — el mismo criterio que `arena.cjs` en la Fase 5). El script:
+1. Lee las dimensiones nativas de cada PNG.
+2. Calcula, a mano, la altura de destino MÁXIMA real con la que ese sprite se
+   dibuja en juego (a partir de las fórmulas de `drawSprite(...)` en
+   `index.html`: `size*escala*zoom_máx(1.6)*DPR(2)`, con un margen del 15%), y
+   la clampa a la altura nativa (nunca sobre-escala más allá del detalle real
+   de la fuente: si lo pedido es mayor que lo que hay, se copia tal cual).
+3. Empaqueta cada sprite ya PRE-ESCALADO a ese tamaño en un único lienzo
+   (empaquetado "shelf", 1024px de ancho) y guarda `atlas.png` (RGBA) +
+   `atlas.json` (`{w,h,frames:{nombre:{x,y,w,h}}}`).
+
+Resultado: atlas de 1024×2159 (~2.5MB) para 30 sprites, frente a ~3.7MB en 30
+peticiones sueltas — menos peticiones Y sin tener que reescalar desde el PNG
+nativo (hasta 462px) hasta los ~30-70px con que se ve una unidad/edificio en
+pantalla. `drawSprite(...)` en `index.html` intenta el atlas primero
+(`ctx.drawImage` con recorte por las coordenadas de `atlas.json`); si el atlas
+no cargó (o le falta ese nombre) cae al PNG suelto de `assets/sprites/`
+(carga perezosa, solo bajo demanda) y, si tampoco existe, al emoji de
+respaldo de siempre. Verificado con comparación de píxeles (ver
+`progress.md`): diferencia media <3/255 por canal frente al PNG suelto al
+mismo tamaño de destino (el margen viene de que el atlas añade un paso de
+reescalado extra, no de un recorte incorrecto).
+
+Las 4 texturas `tile_grass/water/mountain/dirt` se quedan **fuera** del atlas
+a propósito: se usan con `ctx.createPattern(img,...)` sobre la imagen
+COMPLETA (repite el sprite entero como textura); meterlas en el atlas
+obligaría a recortarlas primero a un canvas aparte para no repetir el atlas
+entero como patrón, y con solo 4 archivos de 256×256 cacheados una vez
+(`_patterns`) el ahorro sería nulo frente al riesgo de un patrón mal
+recortado.
+
 ### Murallas y Puerta (PR #7 / Fase 4)
 Sprites ya integrados fuera de la tabla anterior: `bld_wall.png`/
 `bld_wall_h.png`/`bld_wall_v.png` (muro, con variantes horizontal/vertical

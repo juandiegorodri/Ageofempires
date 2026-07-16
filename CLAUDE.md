@@ -535,3 +535,41 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
     verificar con una conexión a internet real (o en el iPad). Ver
     `progress.md` (entrada 2026-07-15/16) para el detalle completo de qué se
     pudo y qué no se pudo probar.
+- **FASE 8 — Rendimiento, carga y calidad final** (PR #17): ver `PLAN.md` §4
+  F8. Con esto el plan maestro queda **completo** (F1-F8).
+  - **Atlas de sprites**: 30 de los 34 PNG de `assets/sprites/` empaquetados
+    en `assets/atlas.png`+`assets/atlas.json`, cada uno YA PRE-ESCALADO a su
+    tamaño máximo real de uso en juego (×2 para Retina, clampado a no
+    sobre-escalar más allá de la resolución nativa). `drawSprite(...)` prueba
+    el atlas primero (recorte por coordenadas); si falla o le falta el
+    sprite, cae al PNG suelto de siempre (ahora de carga PEREZOSA: solo se
+    pide por red si hace falta) y, si tampoco existe, al emoji de respaldo
+    (sin cambios). Las 4 texturas tileables (`tile_*`, usadas con
+    `createPattern`) se quedan fuera del atlas a propósito. Ver
+    `assets/ART.md` para el detalle del empaquetado y la verificación de
+    píxeles (diferencia media <3/255 frente al PNG suelto al mismo tamaño).
+  - **GC y allocs**: pool de objetos para proyectiles y pings
+    (`_projPool`/`_pingPool`, evita crear un objeto nuevo por cada disparo o
+    ping) con retirada O(1) por intercambio con el último elemento (en vez
+    de `.splice()`); `update()` ya no recalcula `frameWalls` con
+    `entities.filter(...)` cada cuadro sino reutilizando el array. Sin
+    cambios de comportamiento observable ni en el protocolo MP.
+  - **Pantalla de carga**: overlay `#loadScreen` con barra de progreso sobre
+    los assets gráficos (atlas o, si falla, los PNG sueltos de respaldo);
+    tope de 4s para nunca dejar al jugador atascado. `<link rel=preload>`
+    del atlas y meta Open Graph/Twitter Card para compartir el enlace.
+  - **Verificación headless**: carga por HTTP real (equivalente a
+    producción https) con el atlas activo y 0 errores; comparación de
+    píxeles atlas-vs-PNG-suelto en 6 sprites; fallback verificado ocultando
+    el atlas; estrés de 285 entidades (`update()+render()` ≈1.4-1.5ms/cuadro,
+    muy por debajo de los 16.7ms de 60fps); partida larga simulada (~20 min
+    de juego, 72.000 cuadros) con heap y arrays estables; regresión completa
+    de un jugador (construir, era, línea de mejora, guarnición, catapulta,
+    mercado, niebla, guardar→recargar→cargar) y de multijugador LAN (0
+    errores, el cliente ve exactamente 1 base propia + 1 rival). Bajo
+    `file://` el atlas se salta el intento de red a propósito (Chromium
+    bloquea `fetch()` local por CORS y lo registraría como error de consola
+    aunque el fallo se capture bien) y cae limpio al PNG suelto: mismo
+    camino de respaldo, cero errores. Matriz QA completa (qué se verificó
+    headless / qué queda pendiente de dispositivo real) en `progress.md`
+    (entrada 2026-07-16).
