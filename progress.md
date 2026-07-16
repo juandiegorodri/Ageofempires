@@ -808,3 +808,21 @@ estructura de código en `filemap.md`, secciones 15-18):
     completar un paso con una unidad distinta a la sugerida sin que el
     tutorial lo note (no se considera un problema: el objetivo pedagógico —
     "ya sabes recolectar madera"— igual se cumple).
+
+### Arreglo tras validación del orquestador — regresión del snapshot MP (Fase 6)
+- La validación independiente detectó que el nuevo 2º parámetro `flip` de
+  `serEntity` (introducido para el guardado local, con `flip=true` por defecto)
+  **rompía el snapshot multijugador**: `makeSnap` hacía `entities.map(serEntity)`,
+  y `Array.map` invoca el callback con `(elemento, índice, array)`, así que la
+  entidad del **índice 0** (siempre el Centro Urbano propio, id=1, creado primero
+  en `startGame`) recibía `flip=0` — *falsy pero no `undefined`*, con lo que el
+  guard `if(flip===undefined) flip=true` no saltaba y esa entidad viajaba **sin
+  voltear el bando**. Efecto: el cliente veía DOS edificios como propios (su base
+  y el Centro Urbano rival), contaminando niebla, selección y toda lógica de
+  `owner==='player'`.
+- Arreglo: envolver el callback → `entities.map(e=>serEntity(e))` (así `flip`
+  queda `undefined` y toma el valor por defecto `true`). El guardado local no
+  estaba afectado porque ya usaba una arrow explícita (`serEntity(e,false)`).
+- Verificado headless con relé real (`server.js` + host + cliente `127.0.0.1`):
+  el cliente ahora ve exactamente 1 Centro Urbano propio y 1 rival (bandos 4/4),
+  cero errores de consola; regresión de un jugador (combate) OK.

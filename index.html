@@ -859,7 +859,10 @@ function serProjectile(p){
 }
 // El "yo" del cliente es el lado 'enemy' del host (por eso va flipado).
 function makeSnap(){
-  return { t:'snap', ents: entities.map(serEntity), me: serSide(enemy), foe: serSide(player),
+  // OJO: envolver serEntity en una arrow — `entities.map(serEntity)` le pasaría
+  // el índice como 2º argumento (`flip`), y para el índice 0 sería `flip=0`
+  // (falsy, pero no `undefined`), que NO voltearía el bando de esa entidad.
+  return { t:'snap', ents: entities.map(e=>serEntity(e)), me: serSide(enemy), foe: serSide(player),
     shots: projectiles.map(serProjectile) };
 }
 function applySnap(m){
