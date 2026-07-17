@@ -1,6 +1,6 @@
-# Mini-AoE ⚔️
+# iMperios ⚔️
 
-Versión **ultra básica de Age of Empires** para jugar con pantalla táctil
+Versión **ultra básica de un RTS clásico** para jugar con pantalla táctil
 directamente desde el navegador del iPad (Safari). La lógica vive en un único
 **`index.html`** (Canvas 2D + JavaScript puro, sin dependencias ni compilación);
 los **gráficos** son sprites pixel-art en `assets/sprites/` (con respaldo de
@@ -24,8 +24,11 @@ Sírvelo como sitio estático y ábrelo en Safari. Opciones:
 > conecta. El modo un jugador funciona perfecto en la web sin nada de esto.
 
 En el **menú principal** eliges: mapa (Llanura / Río / Selva Negra / Riscos),
-recursos iniciales, velocidad, inteligencia de la IA y tu posición. También hay
-una pantalla **«🎨 Prueba gráfica»** que lista todos los sprites.
+recursos iniciales, velocidad, inteligencia de la IA, tu posición, **tiempo de
+tregua** inicial (sin tregua / 1 / 2 / 5 min) y si la **guarnición** de
+unidades está habilitada (deshabilitada por defecto, para que tocar un
+edificio propio con unidades seleccionadas no las guarnezca sin querer).
+También hay una pantalla **«🎨 Prueba gráfica»** que lista todos los sprites.
 
 ### Controles táctiles
 - **Toque simple** en una unidad → la selecciona.
@@ -65,11 +68,14 @@ transportes: **[`iOS.md`](iOS.md)**.
 ## Funcionalidades
 
 El listado completo y siempre actualizado está en **[`CLAUDE.md`](CLAUDE.md)**.
-En resumen: 4 edades, ~12 edificios (incl. Casa, Castillo, granjas/minas con
-capacidad finita, Torre), héroes, **murallas** con torres de arqueros, IA con
-tres doctrinas, mapas temáticos (río con puente, riscos), resumen de partida,
-**multijugador P2P** (LAN por WebSocket y Online por WebRTC/código de sala),
-app iOS para iPad, y gráficos pixel-art con vista cenital.
+En resumen: 4 edades, ~13 edificios (incl. Casa, Castillo, granjas/minas con
+capacidad finita, Torre, Taller de Asedio, Mercado), héroes, catapultas,
+**murallas que bloquean a todos** (propios y rivales) con **puertas** como
+único paso para el dueño y Torres de Muralla construibles sobre un tramo, IA
+con tres doctrinas, mapas temáticos (río con puente, riscos), resumen de
+partida, **multijugador P2P** (LAN por WebSocket y Online por WebRTC/código
+de sala), app iOS para iPad, niebla de guerra, minimapa, guardado local,
+tutorial guiado, y gráficos pixel-art con vista cenital.
 
 ## Documentación
 
