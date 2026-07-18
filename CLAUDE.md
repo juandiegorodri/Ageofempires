@@ -672,3 +672,15 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
     puertas/rodeo de extremos), combate/proyectiles, MP LAN, puente del río,
     y partida real de 300s con IA Difícil, sin errores. Detalle en
     `progress.md` (entrada 2026-07-16, segunda ronda).
+- **Corrección de selección, rally y deselección** (2026-07-18): tres ajustes
+  de usabilidad tras jugar una partida real. El área táctil de unidades/
+  edificios (`hitBox`) ahora sigue la geometría real del sprite (anclado por
+  abajo, crece hacia arriba) en vez de un círculo centrado en la base —
+  tocar la cabeza de un aldeano o el tejado de un edificio ya lo selecciona,
+  no solo cerca de los pies. El punto de reunión (rally) solo se puede fijar
+  en edificios que ENTRENAN unidades (`TRAIN_BLD`: Centro Urbano, Cuartel,
+  Galería de Tiro, Establo, Taller de Asedio, Castillo); Granja/Minas/
+  Herrería/etc. ya no lo aceptan. Tocar la pantalla con 2 dedos SIN mover
+  (ni paneo ni pinch) y soltar rápido deselecciona todo — gesto táctil
+  habitual en iPad, además del botón "✕ Deseleccionar" del panel (que se
+  mantiene para ratón/escritorio).

@@ -1478,3 +1478,45 @@ sprites propios de Ideogram para Catapulta/Taller de Asedio/Mercado (hoy
 usan dibujo procedural/emoji de respaldo). Para retomar el proyecto en una
 sesión nueva: leer `CLAUDE.md` → `filemap.md` → estas últimas entradas de
 `progress.md`.
+
+---
+
+## 2026-07-18 — Corrección de selección, rally y deselección (reporte de juego real)
+
+Tres problemas de usabilidad reportados tras jugar una partida real:
+
+- **Área de toque de unidades/edificios corregida** (`hitBox`, nueva función
+  en el bloque de hit-testing): el `pickAt` anterior usaba un círculo
+  centrado en `e.x,e.y`, pero unidades y edificios (salvo murallas/puertas)
+  se dibujan con el sprite **anclado por abajo** (`e.x,e.y` = la base/pies,
+  el sprite crece hacia arriba, ver `drawUnit`/`drawBuilding`). El círculo
+  solo cubría la mitad inferior del dibujo: tocar la cabeza de un aldeano o
+  el tejado de un edificio no lo seleccionaba, solo tocar cerca de los pies
+  funcionaba. `hitBox(e)` reproduce en coordenadas de mundo la misma
+  geometría que usa el render (altura/ancla del sprite según tipo de unidad
+  o `size`/escala del edificio) y `pickAt` ahora comprueba el toque contra
+  esa caja completa en vez de un círculo. Las murallas/puertas (dibujadas
+  centradas, no ancladas por abajo) mantienen el círculo de siempre.
+  Verificado headless: un toque cerca de la cabeza de un aldeano y uno cerca
+  de los pies seleccionan la misma unidad (antes solo el segundo).
+- **Punto de reunión (rally) solo en edificios que entrenan unidades**: antes
+  cualquier edificio propio seleccionado aceptaba un rally al tocar el mapa,
+  incluida una Granja, una Mina o la Herrería — edificios que no producen
+  unidades y no deberían mostrar ese guía. Nueva constante `TRAIN_BLD`
+  (`town`, `barracks`, `range`, `stable`, `siegeworkshop`, `castle`) y
+  `handleTap` solo fija `selBuild.rally` si `TRAIN_BLD.has(selBuild.btype)`.
+  Verificado headless: tocar el mapa con el Centro Urbano seleccionado fija
+  el rally; con una Granja seleccionada, no.
+- **Deseleccionar con 2 dedos**: gesto táctil habitual en iPad, en vez de
+  depender solo del botón "✕ Deseleccionar" del panel (que se mantiene como
+  alternativa para ratón/escritorio). Un toque con 2 dedos que NO se mueve
+  (ni paneo ni pinch, umbral 12px) y se suelta en <400ms deselecciona todo
+  (`input.twoFinger`/`twoFingerMoved`/`twoFingerTime`, revisado en
+  `pointerdown`/`pointermove`/`pointerup` del canvas); si el gesto se
+  convierte en un paneo o pinch real, se cancela automáticamente y no
+  deselecciona.
+
+Verificado headless (`node`+Playwright/Chromium, `startGame(cfg)` directo sin
+pasar por el menú): 0 errores de consola/`pageerror` en los tres escenarios,
+y las tres correcciones probadas por separado con `pickAt`/`handleTap`
+llamados directamente contra el estado del motor.
