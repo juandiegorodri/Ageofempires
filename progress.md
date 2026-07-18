@@ -1436,3 +1436,45 @@ jugador arranca y funciona con normalidad.
 **Documentación actualizada en la misma tanda**: `README.md`, `DESIGN.md`,
 `PLAN.md`, `CLAUDE.md`, `filemap.md`, `iOS.md`, `assets/ART.md`, este
 archivo.
+
+## 2026-07-18 — Repositorio renombrado en GitHub y PR #20 fusionado a `main`
+
+El usuario renombró manualmente el repositorio en GitHub Settings de
+`juandiegorodri/Ageofempires` a **`juandiegorodri/iMperios`** (cerrando el
+límite conocido registrado en la entrada anterior). GitHub Pages ahora sirve
+desde `https://juandiegorodri.github.io/iMperios/`. GitHub redirige de forma
+transparente el nombre antiguo tanto en la API como en clones/remotos git ya
+existentes, así que no hizo falta cambiar ningún remoto local.
+
+Con el repo ya renombrado, se fusionó a `main` (squash) la PR #20
+"Renombrar el proyecto a iMperios + cerrar el plan maestro" (commit
+`651388f`), que reunía en la misma rama:
+- El renombrado en código Mini-AoE → iMperios (título, `localStorage`,
+  prefijo de salas PeerJS, `manifest.webmanifest`, `server.js`, toda la
+  documentación y la app iOS) descrito en la entrada anterior.
+- El commit de cierre de documentación del plan maestro (secciones nuevas en
+  `PLAN.md` resumiendo F1-F8 + las dos rondas de correcciones
+  post-lanzamiento).
+
+Antes de fusionar se corrió de nuevo la prueba headless de humo (300s
+simulados, IA Difícil, `node`+Playwright/Chromium) directamente sobre el
+código ya renombrado: 0 errores de consola, progresión normal de recursos/
+era, y se confirmó por `grep` que no quedan restos de `miniaoe`/`MiniAoE` en
+`index.html`. Tras el merge, la rama de desarrollo
+`claude/mini-aoe-browser-game-k5vf3r` se resincronizó con el nuevo `main`
+(`git fetch` + `git checkout -B` + `git push --force-with-lease`), dejando
+ambas ramas alineadas.
+
+Se corrigió también la única referencia desactualizada que quedaba en
+`CLAUDE.md` (§3, URL de GitHub Pages con el nombre antiguo del repo), y se
+dejó anotado ahí mismo que el repo se renombró el 2026-07-18.
+
+**Estado actual del proyecto**: plan maestro completo (F1-F8), dos rondas de
+correcciones post-lanzamiento, y el renombrado a iMperios (código +
+repositorio) ya fusionados en `main` y desplegados. Pendientes conocidos sin
+resolver (ver `PLAN.md` §7): verificar una conexión WebRTC/PeerJS real fuera
+del sandbox (sin egreso de red), QA en dispositivo físico (iPad real), y
+sprites propios de Ideogram para Catapulta/Taller de Asedio/Mercado (hoy
+usan dibujo procedural/emoji de respaldo). Para retomar el proyecto en una
+sesión nueva: leer `CLAUDE.md` → `filemap.md` → estas últimas entradas de
+`progress.md`.

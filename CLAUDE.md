@@ -41,8 +41,10 @@ dependencias, sin servidor, sin proceso de compilación).
   otra rama sin permiso explícito.
 - Cada tanda de cambios: commit claro → push → **PR en borrador** hacia `main`.
 - `main` es la rama que sirve **GitHub Pages**:
-  `https://juandiegorodri.github.io/Ageofempires/`. Al fusionar a `main`, la
-  web se actualiza sola.
+  `https://juandiegorodri.github.io/iMperios/`. Al fusionar a `main`, la
+  web se actualiza sola. El repositorio se renombró de `Ageofempires` a
+  `iMperios` el 2026-07-18 (GitHub redirige automáticamente el nombre
+  antiguo, tanto en la API como en clones/remotos git existentes).
 - Tras fusionar una PR con *squash*, **sincroniza la rama con `main`**
   (`git fetch origin main` + `git reset --hard origin/main`) antes de la
   siguiente tanda, para que el próximo PR tenga un diff limpio.
