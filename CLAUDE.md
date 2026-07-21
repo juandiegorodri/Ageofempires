@@ -684,3 +684,61 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
   (ni paneo ni pinch) y soltar rápido deselecciona todo — gesto táctil
   habitual en iPad, además del botón "✕ Deseleccionar" del panel (que se
   mantiene para ratón/escritorio).
+- **FASE 9 (en curso) — Vista de tablero: fichas tipo sticker** (2026-07-21):
+  pivote de dirección de arte hacia un RTS con cámara **cenital estricta**
+  (90°, sin perspectiva) y estética de **juego de mesa** (fichas planas tipo
+  sticker/cartón sobre un tablero de pasto, estilo Carcassonne), pensado para
+  jugarse con el iPad plano sobre una mesa. La SIMULACIÓN no cambia (sigue
+  siendo el mismo RTS en tiempo real, mapa igual de grande, niebla de guerra
+  igual); es un cambio de la capa gráfica y de colocación. Primera tanda
+  (motor + fichas de respaldo, sin arte nuevo todavía):
+  - **Edificios en rejilla, unidades libres**: al construir, el CENTRO del
+    edificio se ajusta (`snapToGrid`) a la misma rejilla de 40px que ya usan
+    niebla/pathfinding/minimapa (`FOG_CELL`); las unidades siguen moviéndose
+    libremente por el mapa (incluida diagonal, sin restricción de rejilla) —
+    solo cambia dónde se asienta un edificio nuevo, no el movimiento en
+    tiempo real. El fantasma de colocación muestra la casilla ya encajada más
+    una rejilla sutil alrededor, para que "se vea tablero" antes de confirmar.
+  - **Fichas centradas y planas** (`drawBuilding`/`drawUnit`): se abandonó el
+    anclaje "por los pies + estirado ×1.7" (simulaba un edificio visto en
+    ¾) por un anclaje CENTRADO en `e.x,e.y`, con sombra recta (sin achatar)
+    en vez de la elipse que simulaba perspectiva — igual en `drawShadow`
+    (recursos), `drawSelRing`/`drawPings` (ya no se achatan).
+  - **Trim de bando en vez de bandera**: cada edificio dibuja un borde blanco
+    + un borde interior del color de bando (azul jugador / rojo rival)
+    directamente sobre su marco — el MISMO arte sirve para ambos jugadores;
+    lo que distingue de quién es un Castillo o una Casa son esas líneas, no
+    un sprite o color distinto por bando. Las unidades llevan el mismo
+    lenguaje: anillo blanco + anillo de color de bando alrededor de la ficha.
+  - **Rotación real hacia el movimiento**: las unidades ya no solo voltean
+    izquierda/derecha (`e.face`, que se conserva SOLO para la caída de los
+    cadáveres) — rotan de verdad hacia el rumbo real de desplazamiento
+    (ángulo suavizado cuadro a cuadro desde el delta de posición, igual en
+    host y cliente MP porque se deriva de `e.x/e.y`, que siempre viajan en el
+    snapshot). Una pequeña muesca triangular de color de bando en el borde
+    del token marca el rumbo con claridad incluso con el arte de respaldo
+    (emoji) de hoy.
+  - **Refuerzo del efecto de interacción**: además del "lunge" ya existente
+    (el atacante/recolector se desplaza hacia su objetivo) y el flash blanco
+    al recibir daño, ahora quien recibe el golpe también sufre un breve
+    "bonk" de escala (`hurtPunch`, ~110ms) — dos fichas que interactúan
+    (atacar, recolectar, construir) se notan claramente en movimiento.
+  - **Hitboxes simplificados** (`hitBox`): al estar ahora centradas, la zona
+    de toque de una unidad es un cuadrado simétrico alrededor de su centro
+    (antes era una caja asimétrica que reproducía el anclaje "por los pies")
+    y la de un edificio es exactamente su huella cuadrada — selección más
+    predecible y fácil de acertar en pantalla táctil.
+  - **`assets/board/board_sprites.json`**: especificación completa (estilo
+    global + 5 hojas/parrillas: unidades, edificios económicos, edificios
+    militares, recursos/props, texturas de piso) con el prompt exacto de
+    cada celda para generar el arte definitivo con IA (Gemini) — arte NEUTRO
+    sin color de bando horneado (lo pinta el motor) y toda pieza mirando
+    hacia el borde superior de su celda (el motor la rota en tiempo real).
+    Cuando llegue ese arte se sustituyen los sprites actuales sin tocar la
+    lógica de juego. Detalle del pipeline de recorte/import en `progress.md`.
+  - Verificado headless: 0 errores de consola, movimiento diagonal libre
+    confirmado, snap de colocación a múltiplos de 40px confirmado, rotación
+    hacia un rumbo diagonal confirmada por cálculo, selección exacta en
+    centro y borde de ficha confirmada, y regresión completa (pathfinding/
+    formaciones/puertas, flip de bandos MP, cruce de puente, 300s con IA
+    Difícil) sin errores.

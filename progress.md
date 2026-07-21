@@ -1520,3 +1520,122 @@ Verificado headless (`node`+Playwright/Chromium, `startGame(cfg)` directo sin
 pasar por el menú): 0 errores de consola/`pageerror` en los tres escenarios,
 y las tres correcciones probadas por separado con `pickAt`/`handleTap`
 llamados directamente contra el estado del motor.
+
+## 2026-07-21 — FASE 9 (arranque): pivote a vista de tablero con fichas tipo sticker
+
+Pedido del usuario tras jugar: pasar de sprites pixel-art en ¾ a un RTS con
+**cámara cenital ESTRICTA** (90°, sin perspectiva) y estética de **juego de
+mesa** — fichas planas tipo sticker/cartón sobre un tablero de pasto (estilo
+Carcassonne, se va descubriendo con la niebla de guerra), pensado para
+jugarse con el iPad plano sobre una mesa. Aclaración del propio usuario
+durante el diseño: la simulación NO cambia — sigue siendo el mismo RTS en
+tiempo real, con el mismo mapa grande (2600×1500) y la misma niebla de
+guerra; solo cambia la capa gráfica y de colocación. Decisiones tomadas en
+conversación (no todas las recomendadas por defecto se aceptaron tal cual):
+- **Edificios en rejilla, unidades libres**: los edificios encajan en una
+  rejilla al construirse; las unidades se mueven libres por todo el mapa,
+  incluida diagonal, sin restricción de rejilla (el usuario fue explícito en
+  que esto es "también un videojuego" y las unidades no pueden quedar
+  atadas a una cuadrícula).
+- **Ficha tipo sticker** (colores vivos + borde blanco), no madera pintada —
+  se lee mejor a tamaño chico en iPad y combina mejor con el piso de pasto.
+- **Bando por líneas de color sobre arte neutro**: el mismo arte de un
+  Castillo sirve para ambos jugadores; lo que distingue de quién es cada
+  ficha son unas líneas (trim) de color que pinta el MOTOR, no el arte.
+- **Rotación real hacia el movimiento** (no solo volteo izquierda/derecha).
+- **Efecto de interacción reforzado**: cuando dos fichas interactúan
+  (ataque/recolección/construcción) debe notarse en movimiento, no solo un
+  cambio de color — se pidió explícitamente añadir esto sobre lo que ya
+  existía (el "lunge" de la Fase 1).
+
+### Cambios de motor (esta tanda, sin arte nuevo todavía — placeholders)
+- **`snapToGrid(x,y)`** (junto a `FOG_CELL`): nueva función que ajusta un
+  punto al múltiplo de 40px más cercano. Se usa en `tryPlaceBuilding` (la
+  colocación real) y en el fantasma de `render()` (lo que se ve durante la
+  colocación es exactamente donde caerá) — con una rejilla sutil dibujada
+  alrededor de la celda destino para reforzar la lectura de "tablero". Las
+  murallas NO se tocaron (mantienen su propio sistema de espaciado
+  `WALL_SP`/`snapWallEndpoint`, ya verificado en dos rondas de correcciones
+  anteriores — cambiarlo habría sido un riesgo innecesario para este pivote).
+- **`drawBuilding` reescrito**: ancla la ficha CENTRADA en `e.x,e.y` (variable
+  `box`, ≈`d.size*1.05`) en vez del "por los pies + estirado ×1.7" de antes
+  (simulaba un edificio visto en ¾); todos los offsets dependientes (barra
+  de vida, barra de progreso, caja de selección, humo/fuego, flash de daño)
+  se recalcularon relativos al nuevo centro. Se añadió una sombra recta
+  desplazada (sin achatar) y un **trim de bando**: borde blanco + borde
+  interior del color de bando (azul jugador / rojo rival) sobre el marco del
+  edificio, que reemplaza la bandera pequeña de antes (se perdía a tamaños
+  chicos de cámara y no cumplía el pedido de "líneas de color" sobre la
+  MISMA pieza). Las murallas/puertas no se tocaron (ya eran planas/
+  centradas desde la ronda de correcciones anterior).
+- **`drawUnit` reescrito**: se sustituyó el volteo ±1 + bamboleo de ángulo
+  fijo por una **rotación real** hacia el rumbo de movimiento. El ángulo
+  (`fx.angle`, guardado en el mismo `Map` `unitFace` que ya existía) se
+  suaviza cuadro a cuadro por interpolación angular de camino corto (evita
+  el salto de ±180° al cruzar el signo) a partir del delta de posición real
+  — funciona igual en host y cliente MP porque se deriva de `e.x/e.y`, que
+  siempre viajan en el snapshot (mismo mecanismo que ya usaba el bamboleo/
+  volteo de la Fase 1). `e.face` (±1) se conservó, pero AHORA solo para la
+  caída de los cadáveres (`drawCorpses`), no para el dibujo en vivo. Cada
+  unidad dibuja un relleno claro tipo cartón + anillo blanco + anillo de
+  color de bando + una muesca triangular que marca el rumbo con claridad
+  incluso con el arte de respaldo (emoji) de hoy — en cuanto llegue el arte
+  real de la parrilla, rotará igual de bien porque se diseñó para ello (ver
+  `board_sprites.json`, todas las piezas miran "hacia arriba" por defecto).
+  Se añadió `hurtPunch`: un pulso de escala breve (~110ms) al recibir daño,
+  sumado al lunge del atacante y al flash blanco ya existentes, para que la
+  interacción se note en AMBAS fichas, no solo en la de enfrente.
+- **Cámara cenital estricta de verdad**: `drawShadow` (sombra de recursos),
+  `drawSelRing` (anillo de selección) y `drawPings` (efectos de selección/
+  deselección) dejaron de achatarse con `ctx.scale(1,0.5)` — esa elipse
+  simulaba una cámara en ángulo; con 90° estricto, un círculo recto es lo
+  correcto.
+- **`hitBox` simplificado**: con las fichas ya centradas, la zona de toque de
+  una unidad es un cuadrado simétrico de radio fijo alrededor de su centro
+  (antes reproducía offsets asimétricos para calzar con el anclaje "por los
+  pies") y la de un edificio es exactamente su huella cuadrada + margen
+  táctil — selección más simple y predecible, verificado por prueba (toque
+  en el centro exacto Y en el borde desplazado de una ficha, ambos
+  seleccionan correctamente).
+- **`assets/board/board_sprites.json`**: especificación completa entregada
+  al usuario para generar el arte definitivo con Gemini (no Ideogram, que se
+  usó para el set v1) — 5 hojas/parrillas (P1 unidades 3×3, P2 edificios
+  económicos 3×4, P3 edificios militares 2×2, P4 recursos/props 3×2, P5
+  texturas de piso 2×2), cada celda con su prompt exacto en inglés, más un
+  bloque de estilo global (sticker, cenital estricto, arte neutro de bando,
+  sin sombra horneada, orientación "mirando hacia arriba" para que la
+  rotación del motor funcione) y una sección `how_to_use` con el flujo de
+  recorte/importación. Nota en `assets/ART.md` marcando el pivote de
+  dirección de arte (v1 pixel-art ~70° sigue documentada y en uso mientras
+  no se reemplace; v2 sticker/90° es la nueva dirección para lo que venga).
+
+### Verificación headless
+Suite completa re-ejecutada tras los cambios, 0 errores de consola en todos
+los casos:
+- Movimiento diagonal libre de una unidad (sin restricción de rejilla) tras
+  una orden de `applyGroupMove` fuera de cualquier alineación de 40px.
+- Colocación de un edificio (`tryPlaceBuilding`) con snap confirmado por
+  aritmética (`b.x % FOG_CELL === 0` y lo mismo en Y).
+- Rotación hacia un rumbo diagonal confirmada por cálculo (`atan2` del
+  desplazamiento real tras 20 cuadros simulados con `update()+render()`).
+- Selección por toque exacta: centro de un edificio, centro de una unidad, y
+  un toque desplazado ~10px hacia el borde del token — las tres seleccionan
+  correctamente.
+- Regresión general: 300s simulados con IA Difícil (partida completa vía
+  `startGame`+`update()` en bucle), suite de Fase 4 (A*/formaciones/puertas/
+  rodeo de extremos), flip de bandos en cliente MP, y cruce de puente sobre
+  el río — todo sin errores y con el comportamiento esperado.
+- Capturas de pantalla revisadas visualmente: Centro Urbano ya como ficha
+  centrada con trim blanco+azul claramente visible; aldeano en movimiento
+  rotado hacia su rumbo (con el arte pixel-art v1 actual se ve "inclinado"
+  en vez de "girado limpio" — esperado, mejorará al llegar el arte v2 diseñado
+  para rotar); fantasma de colocación de edificio ya encajado a la rejilla.
+
+### Pendiente
+- Integrar el arte real de `board_sprites.json` en cuanto el usuario lo
+  genere con Gemini y lo entregue (Fase B del plan: recorte + carga +
+  sustitución de los sprites placeholder, sin tocar lógica de juego).
+- Pulido visual adicional una vez haya arte real (ajuste fino de tamaño/
+  anclaje por pieza, posible mosaico de piso de pasto con textura en vez del
+  patrón actual — ya existe `tile_grass` pero podría regenerarse con el
+  estilo v2 usando `P5_ground_tiles` del JSON).
