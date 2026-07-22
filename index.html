@@ -509,28 +509,48 @@ const STRONG_VS = { archer:'infantry', infantry:'pike', pike:'cavalry', cavalry:
 
 // Definición de unidades. `cat` = categoría de combate (para el cuadrilátero).
 // `hero:true` marca a los héroes (unidades especiales del Castillo).
+// `faceOffset` (radianes, convención 0=arriba/π·½=derecha/π=abajo/-π·½=izquierda):
+// corrige el "sentido" real en el que quedó dibujado cada sprite (la mayoría
+// del arte NO respetó la convención "mirar hacia arriba" del prompt original,
+// ver `assets/board/board_sprites.json`) para que, sumado al ángulo de
+// movimiento real (`drawAngle` en `drawUnit`), la ficha gire alineada con su
+// rumbo en vez de "ir hacia atrás". Calibrado a mano mirando cada PNG; sin
+// pista clara de dirección se deja en 0 (el sentido que pedía el prompt).
 const UNIT = {
   villager: { name:'Aldeano',   emoji:'👷', cat:'villager', hp:40, atk:4, speed:58, range:16, cd:1.3, pop:1,
-              cost:{food:50}, train:11 },
+              cost:{food:50}, train:11, faceOffset:0 },
   infantry: { name:'Milicia',   emoji:'⚔️', cat:'infantry', hp:55, atk:6, speed:56, range:16, cd:1.1, pop:1,
-              cost:{food:60}, train:14 },
+              cost:{food:60}, train:14, faceOffset:-Math.PI/2 },
   pike:     { name:'Piquetero', emoji:'🔱', cat:'pike',     hp:60, atk:6, speed:52, range:18, cd:1.2, pop:1,
-              cost:{food:35,wood:25}, train:15 },
+              cost:{food:35,wood:25}, train:15, faceOffset:-Math.PI/2 },
   archer:   { name:'Arquero',   emoji:'🏹', cat:'archer',   hp:55, atk:5.42, speed:55, range:92, cd:1.2, pop:1,
-              cost:{wood:40,gold:25}, train:17 },
+              cost:{wood:40,gold:25}, train:17, faceOffset:-Math.PI/2 },
   cavalry:  { name:'Caballo',   emoji:'🐎', cat:'cavalry',  hp:52, atk:6.87, speed:96, range:18, cd:1.4, pop:1,
-              cost:{food:70,gold:40}, train:21 },
+              cost:{food:70,gold:40}, train:21, faceOffset:Math.PI/2 },
   // Héroes (Castillo): versiones potentes de cada categoría.
   hero_sword:  { name:'Héroe Espada', emoji:'🦸', cat:'infantry', hero:true, hp:200, atk:18, speed:60, range:18, cd:1.0, pop:2,
-                 cost:{food:120,gold:120}, train:30 },
+                 cost:{food:120,gold:120}, train:30, faceOffset:0 },
   hero_archer: { name:'Héroe Arco',   emoji:'🏹', cat:'archer',   hero:true, hp:130, atk:14, speed:58, range:120, cd:1.3, pop:2,
-                 cost:{wood:100,gold:140}, train:30 },
+                 cost:{wood:100,gold:140}, train:30, faceOffset:-Math.PI/2 },
   hero_cav:    { name:'Héroe Jinete', emoji:'🐎', cat:'cavalry',  hero:true, hp:280, atk:22, speed:100, range:18, cd:1.2, pop:2,
-                 cost:{food:150,gold:160}, train:34 },
+                 cost:{food:150,gold:160}, train:34, faceOffset:-Math.PI/2 },
   // Asedio (Fase 5): muy lenta, débil cuerpo a cuerpo, daño de área ×4 contra
   // edificios/murallas (ver `computeDamage`). Requiere Taller de Asedio.
   siege:    { name:'Catapulta', emoji:'🎯', cat:'siege', hp:55, atk:22, speed:22, range:130, cd:2.6, pop:3,
-              cost:{wood:200,gold:100}, train:35 },
+              cost:{wood:200,gold:100}, train:35, faceOffset:Math.PI/2 },
+};
+// Sentido calibrado del arte propio por TIER de línea de mejora (Fase 9B):
+// cada tier es una ilustración independiente y varias NO comparten el
+// "sentido" de su tipo base (p.ej. Piquetero mira a la izquierda, pero su
+// mejora Alabardero mira hacia arriba) — se calibra por separado, mismas
+// convenciones que `faceOffset` de arriba.
+const TIER_FACE_OFFSET = {
+  infantry_t1: Math.PI/2,
+  infantry_t2: Math.PI/2,
+  pike_t1: 0,
+  archer_t1: -Math.PI/2,
+  cavalry_t1: 0,
+  cavalry_t2: 0,
 };
 
 // Líneas de mejora por Era (Fase 5): cada tier sube ~+35% hp/atk de TODAS las
@@ -579,7 +599,12 @@ const BLD = {
   lumbercamp: { name:'Bosquero',      emoji:'🌲', hp:200,  size:44, cost:{wood:40}, build:14, req:[], plants:true },
   // Murallas (se colocan con la herramienta de muralla, no en el menú normal).
   wall:       { name:'Muralla',       emoji:'🧱', hp:700,  size:30, cost:{stone:5},  build:5, req:[], wall:true },
-  wall_tower: { name:'Torre de Muralla',emoji:'🏯',hp:1100, size:38, cost:{stone:20}, build:9, req:[], wall:true,
+  // Coste y tiempo de mejora IGUALES a los de una Torre real (feedback de
+  // juego real: antes costaba solo 20 piedra y se convertía al instante, así
+  // que una muralla de 5 tramos sacaba 5 Torres de Muralla casi gratis y sin
+  // esperar — ventaja excesiva). Ver `upgradeWallToTower`: ahora paga este
+  // coste y tarda `build` segundos en convertirse (progreso real, no instante).
+  wall_tower: { name:'Torre de Muralla',emoji:'🏯',hp:1100, size:38, cost:{wood:50,stone:125}, build:18, req:[], wall:true,
                 atk:8, range:155, cd:1.0 },
   // Puerta (Fase 4): tramo central de una muralla trazada de ≥3 tramos. Deja
   // pasar a las unidades PROPIAS y bloquea a las rivales SIEMPRE (como una
@@ -997,11 +1022,11 @@ function playSfx(name){
     case 'arrow':     if(sfxAllowed('arrow',60))  playTone(1500, 0.07, 'sine', 0.10); break;
     case 'chop':      if(sfxAllowed('chop',420))  playNoise(0.07, 0.18, 850, 'bandpass'); break;
     case 'mine':      if(sfxAllowed('mine',420))  playTone(300, 0.06, 'square', 0.11); break;
-    // Suavizado (feedback de juego real): el "clic" de construcción sonaba muy
-    // fuerte/molesto en partidas largas (onda cuadrada, muchos armónicos).
-    // Onda triangular (más suave) y menos volumen para un "toc" discreto.
-    case 'build':     if(sfxAllowed('build',380)) playTone(520, 0.05, 'triangle', 0.055); break;
     case 'ready':     playTone(880,0.10,'triangle',0.18); playTone(1180,0.12,'triangle',0.15,0.09); break;
+    // Edificio terminado (feedback de juego real: el "toc" repetido cada
+    // ~380ms durante TODA la construcción era muy invasivo — se quitó del
+    // bucle de construir y se dejó solo este aviso, una vez, al terminar).
+    case 'built':     playTone(660,0.09,'triangle',0.16); playTone(880,0.11,'triangle',0.13,0.07); break;
     case 'destroyed': if(sfxAllowed('destroyed',150)){ playNoise(0.45,0.26,280,'lowpass'); playTone(85,0.45,'sawtooth',0.14); } break;
     case 'alert':     if(sfxAllowed('alert',5000)){ playTone(520,0.14,'square',0.22); playTone(520,0.14,'square',0.2,0.22); } break;
     case 'victory':   playTone(523,0.16,'triangle',0.2); playTone(659,0.16,'triangle',0.2,0.16); playTone(784,0.3,'triangle',0.22,0.32); break;
@@ -1247,6 +1272,7 @@ function serEntity(e, flip){
     if(e.reserve!==undefined){ o.rv=Math.round(e.reserve); o.mrv=e.maxReserve; }
     if(e.rally){ o.ry={x:Math.round(e.rally.x),y:Math.round(e.rally.y)}; if(e.rally.rtype) o.ry.rt=e.rally.rtype; }
     if(e.btype==='gate') o.cl=e.closed?1:0;
+    if(e.upT!=null){ o.up=Math.round(e.upT*10)/10; o.ut=e.upTotal; }   // mejora Muralla→Torre en curso
     if(e.garrison && e.garrison.length) o.gr=e.garrison.length; }   // guarnición (Fase 5): solo el conteo
   else if(e.kind==='resource'){ o.r=e.rtype; o.am=Math.round(e.amount); o.mam=e.maxAmount; }
   return o;
@@ -1263,6 +1289,7 @@ function deserEntity(o){
     if(o.rv!==undefined){ e.reserve=o.rv; e.maxReserve=o.mrv; }
     if(o.ry) e.rally = o.ry.rt ? {x:o.ry.x,y:o.ry.y,rtype:o.ry.rt} : {x:o.ry.x,y:o.ry.y};
     if(o.b==='gate') e.closed = !!o.cl;
+    if(o.up!=null){ e.upT=o.up; e.upTotal=o.ut; }   // mejora Muralla→Torre en curso
     e.garrison = o.gr ? new Array(o.gr).fill(0) : []; }   // guarnición (Fase 5): solo el conteo en el cliente
   else if(o.kind==='resource'){ e.rtype=o.r; e.amount=o.am; e.maxAmount=o.mam; }
   return e;
@@ -1314,7 +1341,7 @@ function applySnap(m){
     if(e.hp!==undefined) prevHp[e.id] = e.hp;
     if(e.kind==='unit') prevUnits[e.id] = { x:e.x, y:e.y, type:e.type, owner:e.owner };
   }
-  const prevTrained = player.stats.trained, prevLostB = player.stats.lostB + enemy.stats.lostB;
+  const prevTrained = player.stats.trained, prevLostB = player.stats.lostB + enemy.stats.lostB, prevBuilt = player.stats.built;
   // Snapshot completo (`snap`) o delta (`snapd`, Fase 7): en el delta se
   // fusionan las entidades actualizadas/eliminadas sobre las que ya había,
   // así que el resultado final es EXACTAMENTE el mismo tipo de array
@@ -1358,6 +1385,7 @@ function applySnap(m){
   Object.assign(player, m.me);
   Object.assign(enemy,  m.foe);
   if(player.stats.trained > prevTrained) playSfx('ready');
+  if(player.stats.built > prevBuilt) playSfx('built');
   if(player.stats.lostB + enemy.stats.lostB > prevLostB) playSfx('destroyed');
   if(m.al) playSfx('alert');
   // Interpolación de posiciones (Fase 7 punto 4): guarda la posición de cada
@@ -1492,7 +1520,7 @@ function hostPlace(m, units){
   for(const u of units) if(u.type==='villager'){ u.state='build'; u.build=b.id; u.halt=false; }
 }
 function hostWall(m){
-  const p0=snapWallEndpoint({x:m.x0,y:m.y0}), p1=snapWallEndpoint({x:m.x1,y:m.y1});
+  const [p0, p1] = wallLineEndpoints({x:m.x0,y:m.y0}, {x:m.x1,y:m.y1});
   const pts=wallPoints(p0, p1);
   const cost={stone:0};
   pts.forEach((pt,i)=>{ cost.stone += BLD[wallSegmentType(pts,i)].cost.stone; });
@@ -1506,19 +1534,24 @@ function hostWall(m){
     entities.push(b); });
 }
 // Mejora explícita: convierte un tramo de muralla NORMAL ya construido en una
-// Torre de Muralla, pagando su coste real (antes salían gratis cada N tramos
-// al trazar la línea — una trampa, ver `wallSegmentType`). Se hace EN EL SITIO
-// (misma posición/bando), así sigue formando parte de la misma línea de
-// muralla sin dejar un hueco.
+// Torre de Muralla, pagando su coste real (igual al de una Torre de verdad,
+// ver BLD.wall_tower) y TARDANDO `build` segundos en completarse (`w.upT`
+// cuenta regresiva, decrementada en `update()` junto al resto de edificios;
+// antes se convertía al instante — con una muralla de 5 tramos salían 5
+// Torres casi gratis y sin esperar, ventaja excesiva reportada en juego
+// real). El tramo sigue siendo una muralla NORMAL (sigue bloqueando/
+// colisionando igual) mientras dura la mejora; recién al llegar a 0 cambia
+// de `btype` y empieza a disparar. Se hace EN EL SITIO (misma posición/
+// bando), así sigue formando parte de la misma línea de muralla sin dejar
+// un hueco.
 function upgradeWallToTower(w){
-  if(!w || w.btype!=='wall' || !w.built) return;
+  if(!w || w.btype!=='wall' || !w.built || w.upT) return;
   const s = side(w.owner);
   if(!canAfford(s, BLD.wall_tower.cost)) return;
   pay(s, BLD.wall_tower.cost);
-  w.btype = 'wall_tower';
-  w.maxHp = BLD.wall_tower.hp; w.hp = BLD.wall_tower.hp;
-  invalidatePathGrid();   // cambia el radio de colisión (tamaño distinto)
-  if(w.owner==='player') showHint('Torre de Muralla construida.');
+  w.upT = BLD.wall_tower.build;
+  w.upTotal = BLD.wall_tower.build;
+  if(w.owner==='player') showHint('Mejorando a Torre de Muralla...');
 }
 
 /* ==================== GUARDADO LOCAL (Fase 6, un solo jugador) ====================
@@ -2884,15 +2917,15 @@ function update(dt){
         const reach = radiusOf(b)+14;
         if(dist(e,b) > reach){ stepToward(e, b, dt); }
         else if(!b.built){
-          // CONSTRUIR
+          // CONSTRUIR (sin sonido repetido — feedback de juego real: el "toc"
+          // de cada tanda era muy invasivo; solo suena al TERMINAR, ver 'built')
           b.progress += dt; e.anim=0.3;
-          playSfx('build');
           const need = BLD[b.btype].build;
           b.hp = Math.max(b.hp, BLD[b.btype].hp * (0.05 + 0.95*Math.min(1,b.progress/need)));
           if(b.progress>=need){ b.built=true; b.hp=BLD[b.btype].hp; e.state='idle'; e.build=null;
             side(b.owner).stats.built++;
             if(BLD[b.btype].wall) invalidatePathGrid();   // nueva muralla/puerta: el grid de A* queda obsoleto
-            if(e.owner==='player') showHint(BLD[b.btype].name+' construido.'); }
+            if(e.owner==='player'){ showHint(BLD[b.btype].name+' construido.'); playSfx('built'); } }
         } else if(b.built && BLD[b.btype].produces && b.reserve < b.maxReserve && b.hp>=b.maxHp){
           // RECARGAR un edificio de producción (hasta 500; cuesta el coste de construcción)
           const dr = Math.min(b.maxReserve - b.reserve, 160*dt);
@@ -2963,6 +2996,18 @@ function update(dt){
   // Edificios: cola de producción, torres defensivas y bosqueros
   for(const e of entities){
     if(e.kind!=='building' || !e.built) continue;
+    // Mejora de Muralla → Torre de Muralla en curso (ver `upgradeWallToTower`):
+    // sigue siendo una muralla normal (colisiona/bloquea igual, sin disparar)
+    // hasta que el contador llega a 0.
+    if(e.upT!=null){
+      e.upT -= dt;
+      if(e.upT<=0){
+        e.btype='wall_tower'; e.maxHp=BLD.wall_tower.hp; e.hp=BLD.wall_tower.hp;
+        e.upT=null; e.upTotal=null;
+        invalidatePathGrid();   // cambia el radio de colisión (tamaño distinto)
+        if(e.owner==='player') showHint('Torre de Muralla construida.');
+      }
+    }
     const bd = BLD[e.btype];
     // Torres/castillos: disparan a enemigos cercanos
     if(bd.atk){
@@ -3632,9 +3677,13 @@ function render(){
     const w = screenToWorld(input.curScreen.x, input.curScreen.y);
     if(placement.wall){
       if(placement.start){
-        // Vista previa de la línea de muralla con sus tramos
-        const pts = wallPoints(placement.start, {x:w.x,y:w.y});
-        const a=worldToScreen(placement.start.x,placement.start.y), b=worldToScreen(w.x,w.y);
+        // Vista previa de la línea de muralla con sus tramos — usa los MISMOS
+        // extremos encajados a rejilla y bloqueados a horizontal/vertical que
+        // se van a construir de verdad (`wallLineEndpoints`), para que lo que
+        // se ve sea exactamente lo que va a quedar (nunca una diagonal).
+        const [p0,p1] = wallLineEndpoints(placement.start, {x:w.x,y:w.y});
+        const pts = wallPoints(p0, p1);
+        const a=worldToScreen(p0.x,p0.y), b=worldToScreen(p1.x,p1.y);
         ctx.strokeStyle='rgba(202,164,106,.6)'; ctx.lineWidth=2;
         ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
         pts.forEach((pt,i)=>{ const sp=worldToScreen(pt.x,pt.y); const isGate=wallSegmentType(pts,i)==='gate';
@@ -3879,18 +3928,11 @@ function drawBuilding(e){
     }
   }
   ctx.globalAlpha=1;
-  // Trim de bando tipo "ficha de cartón" (borde blanco + borde interior del
-  // color de bando) sobre el marco del edificio: el mismo arte sirve para
-  // ambos jugadores, y lo que distingue de quién es cada ficha (Castillo,
-  // Casa...) son estas líneas — reemplaza la bandera pequeña de antes, que
-  // se perdía a tamaños chicos de cámara.
-  if(!d.wall && e.built){
-    const teamColor = e.owner==='player' ? '#5b86c4' : '#d05a5a';
-    ctx.strokeStyle='#fff'; ctx.lineWidth=Math.max(1.5,3*cam.zoom);
-    roundRect(s.x-box/2, s.y-box/2, box, box, 8*cam.zoom); ctx.stroke();
-    ctx.strokeStyle=teamColor; ctx.lineWidth=Math.max(1,2*cam.zoom);
-    roundRect(s.x-box/2+2.5*cam.zoom, s.y-box/2+2.5*cam.zoom, box-5*cam.zoom, box-5*cam.zoom, 6*cam.zoom); ctx.stroke();
-  }
+  // (el trim blanco+color de bando sobre el marco se quitó por pedido
+  // explícito tras juego real: "destruye totalmente la gráfica tan bonita
+  // que tenemos en los edificios" — el arte queda tal cual, sin borde
+  // añadido. La distinción de bando la dará el arte propio por equipo que
+  // se añadirá más adelante en carpetas separadas.)
   // Puerta: candado abierto/cerrado siempre visible (no solo al seleccionar),
   // para saber su estado de un vistazo antes de mandar unidades a cruzar.
   if(d.gate && e.built){
@@ -3916,6 +3958,11 @@ function drawBuilding(e){
     const w=box, frac=Math.min(1,e.progress/d.build);
     ctx.fillStyle='#000a'; ctx.fillRect(s.x-w/2, s.y+box/2+3, w, 5);
     ctx.fillStyle='#caa46a'; ctx.fillRect(s.x-w/2, s.y+box/2+3, w*frac, 5);
+  } else if(e.upT){
+    // progreso de la mejora Muralla → Torre de Muralla en curso
+    const w=box, frac=1-Math.max(0, e.upT/(e.upTotal||1));
+    ctx.fillStyle='#000a'; ctx.fillRect(s.x-w/2, s.y+box/2+3, w, 5);
+    ctx.fillStyle='#8fc7e8'; ctx.fillRect(s.x-w/2, s.y+box/2+3, w*frac, 5);
   } else if(!(d.wall && e.hp>=e.maxHp)){
     drawHpBar(s.x, s.y-box/2-8*cam.zoom, box, e.hp/e.maxHp, e.owner);
   }
@@ -4021,29 +4068,24 @@ function drawUnit(e){
   ctx.beginPath(); ctx.arc(cx+2*cam.zoom, cy+3*cam.zoom, sz*0.52, 0, Math.PI*2);
   ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fill();
 
-  // Anillo tipo "sticker" + muesca de dirección: SÍ rotan hacia el rumbo real
-  // (son formas simples, geométricamente neutras a la rotación). El arte de
-  // la ficha, en cambio, YA NO rota (ver más abajo) — feedback de juego real
-  // tras integrar el arte: no todas las piezas generadas respetan de forma
-  // consistente la convención "mirar hacia arriba", así que rotar el dibujo
-  // completo hacía que varias unidades se vieran moviéndose "hacia atrás" o
-  // "de lado". La muesca sigue marcando el rumbo real con fiabilidad.
+  // Anillo tipo "sticker": base neutra bajo la ficha (sin color de bando —
+  // el borde azul/rival rojo se quitó por pedido explícito tras juego real:
+  // "destruye completamente la gráfica". La distinción de bando la dará el
+  // arte propio por equipo que se añadirá más adelante en carpetas separadas).
   const drawAngle = fx.angle + Math.PI/2;
   setUnitTransform(cx, cy, drawAngle, 1);
   ctx.beginPath(); ctx.arc(0, 0, sz*0.52, 0, Math.PI*2);
   ctx.fillStyle='rgba(245,238,222,.94)'; ctx.fill();
   ctx.lineWidth=Math.max(1.4,sz*0.1); ctx.strokeStyle='#fff'; ctx.stroke();
-  ctx.beginPath(); ctx.arc(0, 0, sz*0.44, 0, Math.PI*2);
-  ctx.lineWidth=Math.max(1,sz*0.06);
-  ctx.strokeStyle = e.owner==='player' ? '#3f7fd9' : '#d9463f';
-  ctx.stroke();
-  ctx.fillStyle = ctx.strokeStyle;
-  ctx.beginPath();
-  ctx.moveTo(0, -sz*0.62); ctx.lineTo(-sz*0.11, -sz*0.46); ctx.lineTo(sz*0.11, -sz*0.46);
-  ctx.closePath(); ctx.fill();
   resetTransform();
 
-  // Ficha (sprite/emoji) SIEMPRE en pie, sin rotar — ver nota arriba.
+  // Ficha (sprite/emoji): AHORA SÍ rota hacia el rumbo real de movimiento
+  // (pedido explícito: antes solo giraba el anillo, "las direcciones solo se
+  // ven hacia un sentido"). Cada sprite base/tier trae su propio "sentido"
+  // ya dibujado (unos miran hacia arriba, otros hacia un lado, según generó
+  // la IA de arte) — se corrige con `d.faceOffset`/`TIER_FACE_OFFSET`
+  // (calibrado a mano mirando cada PNG) para que, sumado a `drawAngle`, la
+  // ficha arranque alineada y gire junto con el vector de movimiento real.
   const uH = 30*cam.zoom * (e.anim>0?1.12:1) * hurtPunch;
   // FASE 9B: arte propio por TIER de línea de mejora (Fase 5) si existe,
   // igual en host y cliente MP (el tier es del BANDO, viaja gratis en
@@ -4052,11 +4094,14 @@ function drawUnit(e){
   // `drawSprite` devuelve false y se reintenta con el de tipo base — sin
   // volver a pedir nada por red gracias al registro previo en SPRITE_FILES.
   const tier = d.hero ? 0 : lineTierCount(e.owner, d.cat);
-  const drewTiered = tier>0 && drawSprite('unit_'+d.cat+'_t'+tier, cx, cy, uH, false);
-  if(!drewTiered && !drawSprite('unit_'+e.type, cx, cy, uH, false)){
+  const tierKey = tier>0 ? (d.cat+'_t'+tier) : null;
+  const faceOff = tierKey!=null ? (TIER_FACE_OFFSET[tierKey]||0) : (d.faceOffset||0);
+  setUnitTransform(cx, cy, drawAngle+faceOff, 1);
+  const drewTiered = tier>0 && drawSprite('unit_'+d.cat+'_t'+tier, 0, 0, uH, false);
+  if(!drewTiered && !drawSprite('unit_'+e.type, 0, 0, uH, false)){
     // respaldo: aura + emoji + estrella de héroe
     if(d.hero){
-      ctx.beginPath(); ctx.arc(cx, cy, sz*0.7, 0, Math.PI*2);
+      ctx.beginPath(); ctx.arc(0, 0, sz*0.7, 0, Math.PI*2);
       ctx.fillStyle='rgba(230,190,90,.28)'; ctx.fill();
     }
     // Catapulta sin sprite (Fase 5): el emoji de respaldo (🎯) no lee como una
@@ -4064,23 +4109,14 @@ function drawUnit(e){
     // emoji, un dibujo procedural (ruedas + chasis + brazo lanzador) que se
     // reconoce como catapulta a simple vista (feedback de juego real).
     if(d.cat==='siege' && !d.hero){
-      ctx.save(); ctx.translate(cx,cy); drawCatapultIcon(sz); ctx.restore();
+      drawCatapultIcon(sz);
     } else {
       ctx.font=`${sz}px serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(d.emoji, cx, cy);
-      if(d.hero){ ctx.font=`${12*cam.zoom}px serif`; ctx.fillText('⭐', cx+sz*0.45, cy-sz*0.45); }
+      ctx.fillText(d.emoji, 0, 0);
+      if(d.hero){ ctx.font=`${12*cam.zoom}px serif`; ctx.fillText('⭐', sz*0.45, -sz*0.45); }
     }
   }
-  // Anillo de bando GRUESO, dibujado ENCIMA del sprite (a diferencia del
-  // anillo fino de abajo, este nunca queda tapado por el arte del personaje
-  // aunque llene casi todo el token) — refuerzo pedido tras juego real: el
-  // anillo fino solo no se distinguía bien a simple vista. Hecho por código
-  // (no arte duplicado por bando) para no tener que regenerar ni mantener
-  // dos variantes de cada pieza.
-  ctx.beginPath(); ctx.arc(cx, cy, sz*0.56, 0, Math.PI*2);
-  ctx.lineWidth=Math.max(2,sz*0.13);
-  ctx.strokeStyle = e.owner==='player' ? '#3f7fd9' : '#d9463f';
-  ctx.stroke();
+  resetTransform();
   // flash blanco al recibir daño
   if(e.hurtT){
     const age = performance.now()-e.hurtT;
@@ -4628,7 +4664,10 @@ function tryPlaceBuilding(p){
 }
 
 // --- Murallas: primer toque = inicio, segundo toque = fin de la línea ---
-const WALL_SP = 28;          // separación entre segmentos
+// FASE: separación IGUAL a la rejilla de edificios (FOG_CELL=40px) — antes
+// era 28px, una separación que no correspondía con la rejilla del tablero y
+// dejaba las murallas "flotando" entre casillas (feedback de juego real).
+const WALL_SP = FOG_CELL;
 // Tipo de construcción para el tramo `i` de una muralla de `pts.length` puntos:
 // el tramo CENTRAL es una Puerta 🚪 (si hay al menos 3 tramos, para que tenga
 // sentido); el resto son muralla normal. Antes cada `WALL_TOWER_EVERY` tramos
@@ -4653,7 +4692,7 @@ function wallTap(p){
     placement=null; updateActionPanel();
     showHint('Muralla enviada al anfitrión.'); return;
   }
-  const p0 = snapWallEndpoint(placement.start), p1 = snapWallEndpoint({x:w.x,y:w.y});
+  const [p0, p1] = wallLineEndpoints(placement.start, {x:w.x,y:w.y});
   const pts = wallPoints(p0, p1);
   // coste total (el tramo central es una Puerta si hay sitio para distinguirla)
   const cost = {stone:0};
@@ -4702,6 +4741,18 @@ function snapWallEndpoint(pt){
     x = g.x; y = g.y;
   }
   return {x,y};
+}
+// Extremos FINALES de una muralla: encaja ambos puntos (`snapWallEndpoint`,
+// ya alineados a la rejilla del tablero) y además fuerza la línea a ser
+// estrictamente horizontal o vertical (nunca diagonal) — el arte de muralla
+// (`bld_wall_h`/`bld_wall_v`) solo tiene esas dos orientaciones, así que una
+// línea en diagonal se veía "muy mal" (feedback de juego real). Se conserva
+// el eje dominante (el de mayor recorrido) y se iguala la otra coordenada a
+// la del punto de inicio, que ya está en la rejilla.
+function wallLineEndpoints(rawA, rawB){
+  const p0 = snapWallEndpoint(rawA), p1 = snapWallEndpoint(rawB);
+  if(Math.abs(p1.x-p0.x) >= Math.abs(p1.y-p0.y)) p1.y = p0.y; else p1.x = p0.x;
+  return [p0, p1];
 }
 // Puntos equiespaciados de una línea (inclusive en los extremos).
 function wallPoints(a, b){
@@ -4930,12 +4981,17 @@ function buildingButtons(b){
     // Torre de Muralla como MEJORA explícita de un tramo ya en pie (feedback de
     // juego real: antes salían gratis cada N tramos al trazar la muralla, más
     // barato que construir una Torre de verdad — una trampa). Paga el coste
-    // real de la Torre de Muralla y convierte ESTE tramo, en su sitio.
-    const canUp = b.built && canAfford(player, BLD.wall_tower.cost);
-    actionsEl.appendChild(btnEl('🏯 Construir Torre de Muralla', costStr(BLD.wall_tower.cost), '', canUp, ()=>{
-      if(net.mode==='client'){ netSend({t:'cmd', c:'wallUpgrade', b:b.id}); return; }
-      upgradeWallToTower(b);
-    }));
+    // real de la Torre de Muralla y tarda lo mismo que una Torre en convertir
+    // ESTE tramo, en su sitio (ver `upgradeWallToTower`).
+    if(b.upT){
+      actionsEl.appendChild(btnEl('🏯 Mejorando...', Math.ceil(b.upT)+'s', '', false, ()=>{}));
+    } else {
+      const canUp = b.built && canAfford(player, BLD.wall_tower.cost);
+      actionsEl.appendChild(btnEl('🏯 Construir Torre de Muralla', costStr(BLD.wall_tower.cost), '', canUp, ()=>{
+        if(net.mode==='client'){ netSend({t:'cmd', c:'wallUpgrade', b:b.id}); return; }
+        upgradeWallToTower(b);
+      }));
+    }
   }
   else if(b.btype==='gate'){
     // Puerta: abierta (por defecto) deja pasar al dueño y bloquea al rival, como
