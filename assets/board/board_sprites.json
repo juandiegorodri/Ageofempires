@@ -17,7 +17,7 @@
   "engine_notes": {
     "units": "En juego, TODAS las unidades se dibujan como ficha circular (~44px de diámetro a zoom 1): el motor ya pone un relleno claro tipo cartón + borde blanco + borde de color de bando + muesca de dirección; el PNG de la unidad se recorta a ese círculo interior. Todas las unidades usan el MISMO tamaño de token en juego (no varían por tipo), así que dibújalas todas ocupando proporciones similares dentro de su celda.",
     "buildings": "Los edificios se colocan encajados en una rejilla de 40px (el motor hace snap del CENTRO del edificio a esa rejilla al construir); no hace falta que el arte respete una proporción exacta NxN de celdas de esa rejilla, solo que el tamaño relativo entre 'pequeño/mediano/grande' de esta lista se sienta proporcional (ver 'ingame_px' de cada celda, ya son los tamaños reales usados por el motor).",
-    "walls": "Las murallas horizontal/vertical y la puerta YA tienen arte final (no están en estas hojas) — no se regeneran en esta tanda."
+    "walls": "ACTUALIZADO (2026-07-22): se decidió SÍ regenerar muralla/torre de muralla en el nuevo estilo sticker, para que no desentonen con el resto del set ya regenerado (ver hoja 'P6_walls' más abajo). La Puerta NO necesita imagen propia: el motor la dibuja reutilizando el MISMO sprite de la muralla (horizontal o vertical según su orientación) + una marca oscura pequeña que pinta el propio código encima, más un candado 🔒/🔓 — así que en cuanto se reemplacen bld_wall_h/bld_wall_v, la puerta hereda el estilo nuevo automáticamente, sin trabajo extra."
   },
 
   "sheets": [
@@ -78,8 +78,9 @@
       "sheet_prompt_prefix": "Generate a single 3x4 grid image (12 equal square cells, no gaps) of top-down flat sticker-style medieval RTS building icons, transparent background, thick dark cartoon outline, seen strictly from directly above (orthographic top-down roof view, 90°). Each building is a distinct, instantly recognizable silhouette (roof shape + one or two defining details) — no team colors baked in. Cells, in reading order:",
       "cells": [
         { "row": 1, "col": 1, "id": "town", "name_es": "Centro Urbano", "ingame_px": 74,
-          "silhouette": "el edificio más grande e importante: base cuadrada grande con un techo a cuatro aguas, una torre/campanario central pequeña asomando por encima del techo",
-          "prompt": "top-down flat sticker icon of a large town center building: big square base with a four-sided pitched roof and a small central tower/bell turret poking above the roofline, seen from directly above" },
+          "status": "REESCRITO 2026-07-22 (feedback: le faltaba detalle/épica) — mucho más ornamentado, debe leerse como el corazón monumental de la civilización, no una casa grande.",
+          "silhouette": "el edificio MÁS grande, ornamentado y monumental del set entero: planta cuadrada amplia con un gran techo central a cuatro aguas de tejas oscuras, flanqueado por dos torres/torreones más bajos en las esquinas frontales (cada uno con su propio techo cónico), un campanario/reloj alto y detallado en el centro con una campana visible, banderines/gallardetes ondeando en cada punta de techo, vigas de madera oscura decorativas entrecruzadas sobre los muros de piedra clara, un pórtico de entrada con columnas o arco de piedra tallada, y pequeños detalles dorados (remaches, veletas) que le dan un aire de sede de poder, no de vivienda común",
+          "prompt": "top-down flat sticker icon of an EPIC, highly detailed large town hall / civic keep — the single most ornate and imposing building in the entire set: a wide square base with a grand central four-sided pitched roof of dark tiles, flanked by two smaller corner turrets each with their own conical roof, a tall detailed clock/bell tower rising from the center with a visible bell, small pennant flags fluttering from each roof peak, ornate dark timber cross-bracing over light stone walls, a grand stone entrance archway with carved columns, and small golden accent details (rivets, weathervane) that make it read as a seat of power rather than a plain building, seen from directly above" },
         { "row": 1, "col": 2, "id": "house", "name_es": "Casa", "ingame_px": 42,
           "silhouette": "casa pequeña sencilla, techo a dos aguas, una chimenea",
           "prompt": "top-down flat sticker icon of a small simple house: pitched two-sided roof, one chimney, seen from directly above" },
@@ -105,8 +106,9 @@
           "silhouette": "torre defensiva circular de piedra, base más ancha que la punta, almenas en el borde superior",
           "prompt": "top-down flat sticker icon of a round stone defense tower: circular base, battlements/crenellations around the top rim, seen from directly above" },
         { "row": 4, "col": 1, "id": "castle", "name_es": "Castillo", "ingame_px": 74,
-          "silhouette": "el edificio más grande e imponente: planta cuadrada con cuatro torreones circulares en las esquinas, almenas en todo el perímetro, un patio central visible",
-          "prompt": "top-down flat sticker icon of a large castle: square layout with four round corner turrets, battlements along the whole perimeter, a visible central courtyard, seen from directly above — should read as the single largest, most imposing building in the set" },
+          "status": "REESCRITO 2026-07-22 (feedback: le faltaba detalle/épica) — mucho más fortificado y amenazante, con más capas de detalle que el Centro Urbano (es la mejora tope de era).",
+          "silhouette": "una FORTALEZA masiva y amenazante, con MÁS capas de detalle que cualquier otro edificio del set: planta cuadrada gruesa con CUATRO torreones circulares en las esquinas (cada uno más alto que el resto del muro, con su propia corona de almenas y una tronera/saetera visible), doble anillo de almenas en todo el perímetro del muro principal (más grueso y oscuro que una muralla normal, con manchas de desgaste/musgo en la piedra), un rastrillo/puerta reforzada con refuerzos de hierro visible en un lado, una torre del homenaje central más alta que los torreones asomando por encima del patio, banderas/estandartes ondeando en cada torreón, y un patio interior con adoquinado visible — debe leerse inequívocamente como el edificio más grande, oscuro e imponente de todo el set, con más textura y sombreado interno que el Centro Urbano",
+          "prompt": "top-down flat sticker icon of a MASSIVE, imposing medieval fortress-castle — must read as the single largest, darkest and most heavily fortified building in the entire set, with more layers of detail than any other piece: thick square wall layout with FOUR round corner turrets (each taller than the connecting walls, each with its own crenellated crown and a visible arrow-slit), a double ring of battlements along the whole main wall (thicker and darker stone than a plain wall segment, with weathered/mossy stone texture), a heavily reinforced iron-banded gate visible on one side, a tall central keep tower rising above the courtyard higher than the corner turrets, small banners/pennants flying from each turret, and a visible cobblestone courtyard floor inside, seen strictly from directly above" },
         { "row": 4, "col": 2, "id": "castle_alt_unused", "name_es": "(libre / variante castillo)", "ingame_px": 0,
           "silhouette": "opcional: puedes repetir el castillo desde otro pequeño detalle o dejar una variante de iconografía de bandera neutra sobre un asta, para tener una celda de repuesto",
           "prompt": "optional spare cell: a simple neutral flag on a pole (no team color, plain grey/beige cloth) as a placeholder decorative prop, seen from directly above" },
@@ -169,6 +171,21 @@
           "prompt": "seamless tileable top-down water texture: flat blue with small lighter ripple highlights, flat painterly board-game style, no shadows, no reflections of objects" },
         { "row": 2, "col": 2, "id": "tile_mountain", "name_es": "Roca (riscos)",
           "prompt": "seamless tileable top-down rocky mountain-terrain texture: grey rock with darker cracks/fissures, flat painterly board-game style, no shadows" }
+      ]
+    },
+    {
+      "id": "P6_walls",
+      "status": "PENDIENTE (añadida 2026-07-22, a pedido del usuario) — sin esto, la muralla se vería con el pixel-art viejo mientras todo lo demás ya es sticker. La Puerta NO va aquí: reutiliza el sprite de muralla (ver 'engine_notes.walls').",
+      "filename_suggestion": "sheet_walls.png",
+      "grid": { "cols": 3, "rows": 1, "cell_px": 512 },
+      "sheet_prompt_prefix": "Generate a single 1x3 grid image (3 equal square cells, no gaps) of top-down flat sticker-style medieval RTS wall/fortification pieces, transparent background, thick dark cartoon outline, seen strictly from directly above (90°), grey stone material, no team colors baked in. These pieces are placed edge-to-edge with copies of themselves to form a continuous wall line, so keep the stone pattern generic/seamless-friendly at the left/right (or top/bottom) edges of the cell. Cells, in reading order:",
+      "cells": [
+        { "row": 1, "col": 1, "id": "wall_h", "name_es": "Muralla (tramo horizontal)", "ingame_px": 34,
+          "prompt": "top-down flat sticker icon of a short horizontal stone wall segment: a thick rectangular strip of rough grey stone blocks, oriented so its long axis runs left-to-right, flat top with a subtle crenellation pattern, seen strictly from above" },
+        { "row": 1, "col": 2, "id": "wall_v", "name_es": "Muralla (tramo vertical)", "ingame_px": 34,
+          "prompt": "top-down flat sticker icon of a short vertical stone wall segment: identical style and material to the horizontal wall segment, but rotated 90 degrees so its long axis runs top-to-bottom, seen strictly from above" },
+        { "row": 1, "col": 3, "id": "wall_tower", "name_es": "Torre de Muralla", "ingame_px": 42,
+          "prompt": "top-down flat sticker icon of a fortified wall tower segment: a squat square stone turret (wider and taller-looking than a plain wall segment, but still reads as part of a wall line, NOT a tall freestanding round tower), crenellations around its top rim, one or two small arrow-slit windows, seen strictly from above" }
       ]
     }
   ],
