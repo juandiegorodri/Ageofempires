@@ -1949,3 +1949,103 @@ revisadas visualmente en cada punto, tal como pidió el usuario:
   (o aceptar de una vez que las fichas no rotan y liberar esa restricción
   del prompt) — mientras tanto, la decisión de NO rotar el cuerpo completo
   es la solución vigente y ya verificada.
+
+## 2026-07-22 — FASE 9D: correcciones tras una segunda partida real
+Cinco problemas concretos reportados jugando otra vez con el arte real ya
+integrado (Fase 9B/9C):
+
+- **Rotación real del cuerpo de la ficha**: se revierte la decisión de la
+  Fase 9C de NO rotar el sprite (solo el anillo/muesca) — el usuario insistió
+  explícitamente en que las unidades deben girar de verdad hacia su rumbo.
+  Se añadió `UNIT[type].faceOffset` (radianes; convención 0=arriba,
+  π/2=derecha, π=abajo, -π/2=izquierda) calibrado a mano mirando cada PNG de
+  `assets/sprites/unit_*.png` uno por uno (usando como pista el elemento
+  asimétrico más claro de cada uno: mano/quiver del arquero, cabeza/cola del
+  caballo, punta del escudo del piquetero, brazo de la catapulta, etc.), más
+  `TIER_FACE_OFFSET` para el arte propio por tier de la Fase 9B (varios NO
+  comparten el sentido de su tipo base: el Piquetero mira hacia un lado pero
+  el Alabardero mejorado mira hacia arriba). En `drawUnit`, el sprite ahora
+  se dibuja dentro de `setUnitTransform(cx, cy, drawAngle+faceOff, 1)` en vez
+  de en espacio de pantalla sin rotar. Fórmula verificada con capturas reales
+  moviendo Arquero, Piquetero y Caballo en las 4 direcciones cardinales
+  (comparando contra el PNG sin rotar): la primera pasada tenía el signo
+  invertido (el "lado bueno" del arte quedaba mirando hacia atrás del
+  movimiento en vez de hacia adelante) — detectado justo por esa
+  verificación visual y corregido antes de dar la tarea por terminada. Sigue
+  siendo una calibración de mejor esfuerzo (el arte generado nunca tuvo un
+  "sentido" consistente entre sí, ver Fase 9C) — cuando el usuario integre
+  el arte propio por equipo (ver siguiente punto) conviene recalibrar estos
+  valores mirando las piezas nuevas.
+- **Anillos/bordes de bando quitados de unidades y edificios**: el anillo
+  azul/rojo fino+grueso sobre cada unidad y el trim blanco+color sobre el
+  marco de cada edificio (ambos de la Fase 9B/9C) se eliminaron por completo
+  — el usuario reportó que "destruye completamente la gráfica". El arte
+  queda exactamente como se generó, sin decoración de bando encima. El
+  usuario va a generar dos carpetas de arte propias (equipo azul / equipo
+  rojo) para resolver la distinción de bando con arte real en vez de una
+  línea de color por código; mientras tanto no hay ningún indicador de
+  bando sobre la ficha (queda como deuda visual conocida y aceptada).
+- **Sonido de construcción**: `playSfx('build')` sonaba cada ~380ms durante
+  TODA la construcción de un edificio Y durante toda la mejora de una
+  Torre de Muralla — "muy invasivo... no permite jugar correctamente". Se
+  quitó esa llamada del bucle de construir; ahora solo suena un aviso nuevo,
+  una única vez, al TERMINAR (`playSfx('built')`, nuevo case en `playSfx`,
+  mismo patrón que ya existía para `'ready'` al completar el entrenamiento
+  de una unidad). Detectado también del lado del cliente en multijugador
+  comparando `player.stats.built` entre instantáneas (igual que ya se hacía
+  con `stats.trained`/`'ready'`). Los sonidos de alerta al ser atacado
+  (`'alert'`) y de unidad lista (`'ready'`) no se tocaron.
+- **Torre de Muralla: coste y tiempo reales** (ventaja excesiva reportada:
+  "si una persona crea una muralla de cinco puntos puede crear cinco torres
+  demasiado rápido"). `BLD.wall_tower.cost` pasó de `{stone:20}` a
+  `{wood:50,stone:125}` (igual a `BLD.tower.cost`) y `build` de 9 a 18s
+  (igual a `BLD.tower.build`). `upgradeWallToTower` ya NO cambia el `btype`
+  al pagar — arranca `e.upT`/`e.upTotal` (cuenta regresiva en segundos),
+  decrementada dentro del mismo bucle de `update()` que ya procesaba
+  torres/colas de edificios; mientras dura, el tramo sigue siendo una
+  muralla NORMAL (bloquea/colisiona igual, no dispara); al llegar a 0 recién
+  cambia a `wall_tower` y empieza a disparar. Nueva barra de progreso en
+  `drawBuilding` (color celeste, para distinguirla de la barra de
+  construcción color arena) mientras dura la mejora, y el botón del panel
+  cambia a "🏯 Mejorando..." deshabilitado con el tiempo restante. Estado
+  serializado en el snapshot MP (`serEntity`/`deserEntity`: `o.up`/`o.ut`)
+  para que el cliente vea el mismo progreso sin simular nada.
+- **Murallas alineadas a la rejilla de edificios y solo horizontal/
+  vertical**: reportado que una muralla trazada con una ligera diagonal se
+  veía "muy, muy mal" (el sprite de muralla solo tiene una versión
+  horizontal y una vertical, ninguna diagonal) y que las murallas "no se
+  están construyendo sobre la grilla del edificio". Causa: `WALL_SP` (28px,
+  separación entre tramos) no coincidía con `FOG_CELL` (40px, la rejilla que
+  ya usan edificios/niebla/pathfinding/minimapa), y nada forzaba la línea
+  trazada con la herramienta de dos toques a ser recta. `WALL_SP` ahora es
+  literalmente `FOG_CELL`. Nueva función `wallLineEndpoints(a,b)`: snapea
+  ambos extremos con el `snapWallEndpoint` ya existente (sin tocar su lógica
+  de snap a muralla vecina/borde de mapa/rejilla) y además fuerza la línea a
+  ser horizontal o vertical pura, quedándose con el eje de mayor recorrido e
+  igualando la otra coordenada a la del punto de inicio. Usada en los TRES
+  lugares donde antes se calculaban los extremos por separado: `wallTap`
+  (jugador local), `hostWall` (muralla pedida por el cliente en
+  multijugador vía comando `wall`) y la vista previa de colocación (para que
+  lo que se ve al arrastrar sea exactamente lo que va a quedar construido).
+- **Verificación** (Chromium headless, servido por HTTP real, con capturas
+  de pantalla revisadas visualmente además de aserciones de código):
+  - `wallLineEndpoints({x:500,y:500},{x:620,y:545})` (entrada en diagonal)
+    da `p0=(520,520)`, `p1=(640,520)` — recta y en rejilla
+    (`x%FOG_CELL===0 && y%FOG_CELL===0`).
+  - Trazado real con `wallTap` de (600,600) a (760,660) (diagonal a
+    propósito): 5 tramos, los 5 con la misma `y` (perfectamente horizontal),
+    los 5 en rejilla, con puerta central — igual que pedía el diseño previo
+    de puertas, sin romperlo.
+  - Mejora de Torre de Muralla: paga exactamente el coste de `BLD.tower`
+    (50 madera + 125 piedra), arranca en `btype:'wall'` con `upT=18`, y tras
+    avanzar la simulación 40s (`update(0.1)` × 400) termina en
+    `btype:'wall_tower'` con `upT:null`.
+  - Rotación: capturas de Arquero, Piquetero y Caballo moviéndose a
+    izquierda/derecha/arriba comparadas contra el sprite sin rotar — el
+    "lado bueno" (arco, punta del escudo, cabeza del caballo) queda
+    consistentemente por delante del movimiento en las tres direcciones
+    probadas.
+  - Regresión: ~90s de juego simulado con IA Difícil, velocidad rápida,
+    guarnición y recursos altos (economía, combate, torres, murallas,
+    render) — 0 errores de consola (`pageerror`/`console.error`) en todos
+    los pasos.

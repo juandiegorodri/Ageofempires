@@ -842,3 +842,62 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
       FOG_CELL === 0`), acercamiento a 4 unidades con anillos azul/rojo
       claramente distinguibles, y regresión de 300s con IA Difícil — 0
       errores de consola en todos los pasos.
+  - **FASE 9D — Correcciones tras una segunda partida real** (2026-07-22):
+    - **El cuerpo de la ficha AHORA SÍ rota hacia el rumbo real** (pedido
+      explícito: "en este momento las direcciones solo se ven hacia un
+      sentido"). `UNIT[type].faceOffset` (y `TIER_FACE_OFFSET` para el arte
+      propio por tier, Fase 9B) calibra a mano el "sentido" real en el que
+      quedó dibujado cada PNG (la mayoría NO respetó la convención "mirar
+      hacia arriba" del prompt original — algunos miran hacia un lado, otro
+      hacia arriba, sin patrón consistente entre sí ni entre tiers de la
+      misma unidad); sumado al ángulo de movimiento real (`drawAngle`) en
+      `drawUnit`, la ficha gira alineada con su rumbo en vez de "ir hacia
+      atrás". Verificado moviendo cada tipo en las 4 direcciones cardinales
+      y comparando capturas contra el sprite sin rotar.
+    - **Quitados los anillos/bordes azul-rojo de bando** sobre unidades y el
+      trim blanco+color sobre edificios (pedido explícito: "destruye
+      completamente la gráfica"). El arte queda tal cual, sin decoración de
+      bando añadida por código; la distinción jugador/rival quedará a cargo
+      del arte propio por equipo que el usuario va a generar aparte (carpetas
+      separadas azul/rojo, pendiente de integrar en una tanda futura).
+    - **Sonido de construcción ya no se repite mientras se construye**: el
+      "toc" cada ~380ms durante TODA la obra (edificio o mejora) era muy
+      invasivo ("no permite jugar correctamente"). Se quitó `playSfx('build')`
+      del bucle de construir; ahora solo suena una vez, al TERMINAR
+      (`playSfx('built')`, nuevo case en `playSfx`), igual que ya pasaba con
+      `'ready'` al terminar de entrenar una unidad. Detectado también en el
+      cliente MP comparando `stats.built` entre instantáneas (mismo patrón
+      que `stats.trained`/`'ready'`).
+    - **Torre de Muralla: coste y tiempo reales** (antes costaba solo 20
+      piedra y se convertía al instante — con una muralla de 5 tramos salían
+      5 Torres casi gratis y sin esperar, ventaja excesiva). `BLD.wall_tower`
+      ahora cuesta y tarda exactamente lo mismo que `BLD.tower`
+      (madera+piedra, 18s). `upgradeWallToTower` ya no cambia el `btype` al
+      pagar: arranca una cuenta regresiva (`e.upT`/`e.upTotal`, decrementada
+      en `update()` junto al resto de edificios) durante la cual el tramo
+      sigue siendo una muralla NORMAL (bloquea/colisiona igual, sin
+      disparar); recién al llegar a 0 se convierte y empieza a disparar.
+      Barra de progreso propia en `drawBuilding` mientras dura, y el botón
+      del panel se deshabilita mostrando el tiempo restante. Estado
+      serializado en el snapshot MP (`o.up`/`o.ut`) para que el cliente vea
+      el mismo progreso.
+    - **Murallas alineadas a la rejilla de edificios y solo horizontal/
+      vertical**: antes una muralla trazada con una ligera diagonal se veía
+      "muy mal" (el arte de muralla solo tiene orientación horizontal o
+      vertical) y la separación entre tramos (`WALL_SP=28`) no coincidía con
+      la rejilla de 40px (`FOG_CELL`) que ya usan los edificios. `WALL_SP`
+      ahora es igual a `FOG_CELL`, y una nueva `wallLineEndpoints(a,b)`
+      (usada por `wallTap`, `hostWall` —el camino de muralla en
+      multijugador— y la vista previa de colocación) encaja ambos extremos a
+      la rejilla (`snapWallEndpoint`, sin cambios) y además fuerza la línea a
+      ser estrictamente horizontal o vertical, quedándose con el eje de
+      mayor recorrido. Lo que se ve al arrastrar la herramienta de dos
+      toques ya es exactamente lo que va a quedar construido.
+    - Verificado headless: `wallLineEndpoints` con una entrada en diagonal
+      produce una línea recta encajada a la rejilla; mejora de Torre de
+      Muralla paga el coste real y tarda 18s en convertirse (probado
+      avanzando la simulación); rotación de cada tipo de unidad comparada
+      visualmente en las 4 direcciones cardinales; trazado de una muralla en
+      diagonal con la herramienta real (`wallTap`) confirmado recto y en
+      rejilla; regresión de ~90s de juego simulado con IA Difícil — 0
+      errores de consola.
