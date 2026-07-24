@@ -1162,11 +1162,23 @@ hojas fuente en `assets/_raw/`. Mantener el **respaldo de emoji** en el motor.
     para: seleccionar unidad, llevarla a hacer una acción, deseleccionar,
     crear unidad, subir de Era, atacar unidad, moverse por el mapa, mejorar
     unidad, atacar edificio y construir torre/muralla defensiva.
-  - **Pendiente**: el Centro Urbano cambiando de gráfica por Era (imágenes
-    que el usuario pegó en el chat) no se pudo integrar — no hay forma de
-    extraer una imagen pegada en la conversación a un archivo; falta que el
-    usuario la suba como archivo para procesarla e integrarla.
   - Verificado headless: los 10 pasos del tutorial recorridos sin errores;
     unidades de tier a tamaño consistente (captura); Centro Urbano a
     160×160px exactos con corchetes+titileo y sin estrellas; regresión de
     aldeanos-en-murallas y partida simulada con IA Difícil sin errores.
+- **Gráficas del Centro Urbano por Era y correcciones al tutorial simulado**
+  (2026-07-24): el usuario subió las 3 gráficas por Era como `.zip`.
+  - El Centro Urbano cambia de gráfica según la Era del bando dueño
+    (`townSpriteName`): Era Inicial usa el sprite de siempre, Eras II-IV
+    tienen ficha propia (recortadas/con transparencia real, optimizadas).
+  - **Tutorial corregido**: deseleccionar ya no simula un toque en el mapa
+    (eso mueve a la unidad de verdad) sino el gesto real de 2 dedos sin
+    mover; subir de Era y mejorar unidad ahora muestran el panel de
+    acciones apareciendo y un segundo toque sobre su botón real, con texto
+    más descriptivo; el paso de subir de Era muestra el Centro Urbano
+    cambiando de gráfica con el mismo arte del juego. Se agregaron 2 pasos
+    nuevos (doble toque = mismo tipo, arrastre = caja de selección), 12 en
+    total.
+  - Verificado headless: los 12 pasos recorridos sin errores, capturas de
+    cada gesto nuevo/corregido, `townSpriteName` confirmado por Era, y
+    regresión completa sin errores de consola.
