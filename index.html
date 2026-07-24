@@ -657,28 +657,30 @@ const UNIT = {
               cost:{food:70,gold:40}, train:21, faceOffset:Math.PI/2 },
   // Héroes (Castillo): versiones potentes de cada categoría.
   hero_sword:  { name:'Héroe Espada', emoji:'🦸', cat:'infantry', hero:true, hp:200, atk:18, speed:60, range:18, cd:1.0, pop:2,
-                 cost:{food:120,gold:120}, train:30, faceOffset:-Math.PI/2 },
+                 cost:{food:120,gold:120}, train:30, faceOffset:0 },
   hero_archer: { name:'Héroe Arco',   emoji:'🏹', cat:'archer',   hero:true, hp:130, atk:14, speed:58, range:120, cd:1.3, pop:2,
-                 cost:{wood:100,gold:140}, train:30, faceOffset:-Math.PI/2 },
+                 cost:{wood:100,gold:140}, train:30, faceOffset:0 },
   hero_cav:    { name:'Héroe Jinete', emoji:'🐎', cat:'cavalry',  hero:true, hp:280, atk:22, speed:100, range:18, cd:1.2, pop:2,
                  cost:{food:150,gold:160}, train:34, faceOffset:-Math.PI/2 },
   // Asedio (Fase 5): muy lenta, débil cuerpo a cuerpo, daño de área ×4 contra
   // edificios/murallas (ver `computeDamage`). Requiere Taller de Asedio.
   siege:    { name:'Catapulta', emoji:'🎯', cat:'siege', hp:55, atk:22, speed:22, range:130, cd:2.6, pop:3,
-              cost:{wood:200,gold:100}, train:35, faceOffset:Math.PI/2 },
+              cost:{wood:200,gold:100}, train:35, faceOffset:-Math.PI/2 },
 };
 // Sentido calibrado del arte propio por TIER de línea de mejora (Fase 9B):
 // cada tier es una ilustración independiente y varias NO comparten el
 // "sentido" de su tipo base (p.ej. Piquetero mira a la izquierda, pero su
 // mejora Alabardero mira hacia arriba) — se calibra por separado, mismas
-// convenciones que `faceOffset` de arriba.
+// convenciones que `faceOffset` de arriba. cavalry_t1/cavalry_t2 recalibrados
+// tras rotar esos dos PNG 90° (ver `assets/ART.md`/`progress.md`): ahora
+// comparten el mismo sentido que `cavalry` base.
 const TIER_FACE_OFFSET = {
   infantry_t1: Math.PI/2,
-  infantry_t2: Math.PI/2,
-  pike_t1: 0,
+  infantry_t2: Math.PI,
+  pike_t1: Math.PI/4,
   archer_t1: -Math.PI/2,
-  cavalry_t1: 0,
-  cavalry_t2: 0,
+  cavalry_t1: Math.PI/2,
+  cavalry_t2: Math.PI/2,
 };
 
 // Líneas de mejora por Era (Fase 5): cada tier sube ~+35% hp/atk de TODAS las
@@ -3206,7 +3208,17 @@ function update(dt){
     // La separación (empuje entre unidades) no debe colar a nadie por el río/
     // riscos NI por una muralla/puerta que le bloquee (esquinas de murallas:
     // sin esto, el apiñamiento podía "filtrar" unidades a través del muro).
-    if(blocksUnit(e.x,e.y) || blockedByWall(e,e.x,e.y)){ e.x=px; e.y=py; }
+    if(blocksUnit(e.x,e.y) || blockedByWall(e,e.x,e.y)){
+      e.x=px; e.y=py;
+      // Red de seguridad continua (bug real de juego: aldeanos quedaban
+      // atrapados en murallas en momentos que `unstickUnitsNearWall` no
+      // cubría — crowding entre varias unidades lejos de cualquier tramo
+      // recién terminado, no solo justo cuando termina de construirse). Si
+      // la posición de DESCANSO (antes de este `separate()`) YA estaba
+      // bloqueada, revertir no sirve de nada: se empuja activamente fuera
+      // en vez de dejarla clavada para siempre.
+      if(blockedByWall(e, px, py)) escapeWallIfStuck(e);
+    }
     e.x = clamp(e.x, 8, WORLD.w-8); e.y = clamp(e.y, 8, WORLD.h-8);
   }
 
@@ -4345,8 +4357,11 @@ function drawUnit(e){
 
   // Huellas en el suelo (pedido explícito de efectos visuales): se acumula la
   // distancia recorrida y se suelta una marca cada FOOT_STEP px de mundo (no
-  // cada cuadro, para no saturar el array). La Catapulta tiene ruedas, no pies.
-  if(movedD>0.12 && d.cat!=='siege'){
+  // cada cuadro, para no saturar el array). Antes la Catapulta no dejaba
+  // marca (razonando "tiene ruedas, no pies"), pero se reportó como bug real
+  // de juego ("algunas unidades no dejan huellas, como la catapulta") — ahora
+  // deja marca igual que el resto (se lee bien como rodada).
+  if(movedD>0.12){
     fx.trailDist = (fx.trailDist||0) + movedD;
     if(fx.trailDist >= FOOT_STEP){ fx.trailDist -= FOOT_STEP; addFootprint(e.x, e.y); }
   }

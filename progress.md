@@ -2325,3 +2325,32 @@ función de origen solo corre en el host).
   de `shakeT` cuadro a cuadro, y diferencia real de píxeles entre cuadros
   consecutivos mientras dura); regresión de ~300s con IA Difícil sin errores
   de consola.
+- **Correcciones tras juego real: tamaño/orientación de unidades por tier,
+  huellas y muralla-trampa** (2026-07-24): 4 problemas concretos reportados
+  jugando con el arte por tier de la Fase 9B.
+  - **Escala inconsistente al mejorar de tier**: `unit_pike_t1.png` (Alabardero)
+    y `unit_cavalry_t1`/`unit_cavalry_t2.png` (Caballero/Paladín) tenían
+    canvases mucho más grandes que el personaje real (asta larga o el
+    caballo dibujado en el eje vertical en vez de horizontal como el resto
+    del set), y `drawSprite` escala el canvas COMPLETO a una altura fija —
+    el personaje quedaba diminuto frente a sus hermanos. Recortados
+    (`pike_t1`, `infantry_t2`) o rotados 90° (`cavalry_t1`, `cavalry_t2`, que
+    estaban en el eje equivocado) y reempaquetado `assets/atlas.png`/
+    `atlas.json` (obligatorio: el atlas tiene prioridad sobre el PNG suelto).
+  - **Orientación de movimiento corregida** (`faceOffset`/`TIER_FACE_OFFSET`,
+    recalibrados empíricamente probando las 4 direcciones cardinales, no solo
+    por inspección visual): Catapulta (iba al revés), Campeón, Alabardero
+    (arma en diagonal ~45°, requirió un valor fuera del barrido habitual de
+    90°), Héroe Espada y Héroe Arco (se movían de lado) corregidos.
+  - **La Catapulta ya deja huellas**: se quitó su exclusión explícita
+    (pensada para "tiene ruedas, no pies", pero el jugador lo percibió como
+    un bug real).
+  - **Aldeanos atrapados en murallas al construirlas (persistía)**: la
+    protección existente (`unstickUnitsNearWall`) solo actuaba en el
+    instante en que un tramo terminaba de construirse; un aldeano podía
+    quedar encajado después por simple apiñamiento (`separate()`) sin que
+    ningún muro cambiara de estado. Ahora el chequeo de cada unidad, en CADA
+    cuadro, llama a `escapeWallIfStuck` en cuanto detecta que su posición de
+    reposo (antes de separar) ya está bloqueada por una muralla propia —red
+    de seguridad continua, no solo por evento. Verificado con 16 tramos de
+    muralla y 16 aldeanos construyendo en simultáneo: 0 atrapados.
