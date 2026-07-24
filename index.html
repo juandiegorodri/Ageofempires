@@ -1095,7 +1095,8 @@ const SPRITE_FILES = [
   // solo al de tipo base, nunca a un 404 (comprobado con spr() antes de usar).
   'unit_infantry_t1','unit_infantry_t2','unit_pike_t1','unit_archer_t1',
   'unit_cavalry_t1','unit_cavalry_t2',
-  'bld_town','bld_house','bld_barracks','bld_range','bld_stable','bld_blacksmith',
+  'bld_town','bld_town_age2','bld_town_age3','bld_town_age4',
+  'bld_house','bld_barracks','bld_range','bld_stable','bld_blacksmith',
   'bld_tower','bld_castle','bld_farm','bld_goldmine','bld_quarry','bld_lumbercamp',
   'bld_market','bld_siegeworkshop',
   'bld_wall','bld_wall_h','bld_wall_v','bld_wall_tower',
@@ -4454,12 +4455,22 @@ function drawDamageFx(e, cx, cy, sz){
   }
 }
 
+// El Centro Urbano cambia de gráfica según la Era del bando dueño (arte
+// donado por el usuario): Era Inicial usa el sprite de siempre, Eras II-IV
+// tienen ficha propia. Si por lo que sea faltara el sprite de una era
+// concreta, `spr()`/`drawSprite` no lo encontrarían y caerían solos al
+// respaldo normal (rect+emoji) — no hace falta contemplarlo aquí.
+function townSpriteName(owner){
+  const age = owner==='player' ? player.age : enemy.age;
+  return age>=2 ? ('bld_town_age'+age) : 'bld_town';
+}
 function drawBuilding(e){
   if(!onScreen(e)) return;
   const s=worldToScreen(e.x,e.y); const d=BLD[e.btype];
   const sz=d.size*cam.zoom;
   const sel = e.owner==='player' && selection.includes(e.id);
-  const img = spr(d.gate ? 'bld_wall' : ('bld_'+e.btype));
+  const spriteName = d.gate ? 'bld_wall' : (e.btype==='town' ? townSpriteName(e.owner) : ('bld_'+e.btype));
+  const img = spr(spriteName);
   // FASE 9 — vista de tablero: ficha PLANA anclada en su CENTRO (cámara cenital
   // estricta), no el anclaje "abajo + estirado ×1.7" de antes (simulaba un
   // edificio visto en ¾). `box` es el tamaño visual cuadrado de la ficha;
@@ -4488,7 +4499,7 @@ function drawBuilding(e){
         roundRect(s.x-markW/2, my-markH/2, markW, markH, 3*cam.zoom); ctx.fill(); ctx.stroke();
       }
     } else {
-      drawSprite('bld_'+e.btype, s.x, s.y, box, false);
+      drawSprite(spriteName, s.x, s.y, box, false);
     }
   } else {
     // respaldo: rect + emoji. El Taller de Asedio (sin sprite propio) usa una
@@ -6029,6 +6040,22 @@ function tpBar(x,y,w,frac,color){
   ctx.fillStyle='#000a'; ctx.fillRect(x,y,w,5);
   ctx.fillStyle=color; ctx.fillRect(x,y,w*Math.max(0,Math.min(1,frac)),5);
 }
+// Panel de acciones simulado (para los pasos "subir de Era"/"mejorar unidad":
+// feedback de juego real, "no se entiende porque no se ve el menú" — sin
+// esto solo se veía el toque sobre el edificio, no dónde se pulsa de verdad).
+function tpDrawPanel(y,h){
+  ctx.fillStyle='rgba(10,11,14,.93)'; ctx.fillRect(0,y,TP_W,h);
+  ctx.strokeStyle='rgba(255,255,255,.1)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(TP_W,y); ctx.stroke();
+}
+function tpDrawButton(x,y,w,h,label,active){
+  ctx.fillStyle = active ? 'rgba(255,224,140,.9)' : 'rgba(255,255,255,.12)';
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth=1.2;
+  roundRect(x,y,w,h,6); ctx.fill(); ctx.stroke();
+  ctx.font='11px sans-serif'; ctx.fillStyle = active ? '#241b06' : '#e8e8ec';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(label, x+w/2, y+h/2);
+}
 function tpLerpPath(kf,t){
   if(t<=kf[0].t) return {x:kf[0].x,y:kf[0].y};
   for(let i=1;i<kf.length;i++){ if(t<=kf[i].t){ const a=kf[i-1],b=kf[i],f=(t-a.t)/((b.t-a.t)||1); return {x:a.x+(b.x-a.x)*f, y:a.y+(b.y-a.y)*f}; } }
@@ -6058,28 +6085,61 @@ const TP_STEPS = [
   { text:'Toca un aldeano para seleccionarlo.', dur:2.2,
     actors:[{sprite:'unit_villager', emoji:'👷', x:120,y:110, h:34, selFrom:0.6}],
     taps:[{t:0.5,x:120,y:110}] },
+  { text:'Doble toque sobre una unidad: selecciona todas las del mismo tipo visibles en pantalla.', dur:2.6,
+    actors:[
+      {sprite:'unit_infantry', emoji:'⚔️', x:90,y:80, h:26, selFrom:0.9},
+      {sprite:'unit_infantry', emoji:'⚔️', x:172,y:126, h:26, selFrom:0.9},
+      {sprite:'unit_infantry', emoji:'⚔️', x:250,y:76, h:26, selFrom:0.9},
+      {sprite:'unit_villager', emoji:'👷', x:250,y:150, h:24},
+    ],
+    taps:[{t:0.45,x:90,y:80},{t:0.7,x:90,y:80}] },
+  { text:'Arrastra con un dedo sobre el mapa: caja de selección para varias unidades a la vez.', dur:2.6,
+    actors:[
+      {sprite:'unit_infantry', emoji:'⚔️', x:110,y:75, h:26, selFrom:1.35},
+      {sprite:'unit_infantry', emoji:'⚔️', x:175,y:110, h:26, selFrom:1.35},
+      {sprite:'unit_pike', emoji:'🔱', x:130,y:145, h:26, selFrom:1.35},
+      {sprite:'unit_villager', emoji:'👷', x:280,y:55, h:24},
+    ],
+    fx(t){
+      if(t>=0.5 && t<1.3){
+        const f=(t-0.5)/0.8, x1=80+140*f, y1=50+115*f;
+        ctx.setLineDash([4,3]); ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=1.5;
+        ctx.strokeRect(80,50,x1-80,y1-50); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(x1,y1,6,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fill();
+      } else if(t>=1.3 && t<1.9){
+        ctx.setLineDash([4,3]); ctx.strokeStyle='rgba(255,224,140,.9)'; ctx.lineWidth=1.5;
+        ctx.strokeRect(80,50,140,115); ctx.setLineDash([]);
+      }
+    } },
   { text:'Con la unidad seleccionada, toca un recurso para que vaya a recolectarlo.', dur:2.8,
     props:[{sprite:'res_wood', emoji:'🌳', x:262,y:66, h:30}],
     actors:[{sprite:'unit_villager', emoji:'👷', h:30, selFrom:0,
       path:[{t:0,x:100,y:135},{t:0.6,x:100,y:135},{t:2.6,x:247,y:82}]}],
     taps:[{t:0.6,x:262,y:66}] },
-  { text:'Toca un lugar vacío del mapa para deseleccionar.', dur:2.0,
+  // Deseleccionar: NO es un toque en el mapa (eso MUEVE a la unidad
+  // seleccionada) — el gesto real es tocar con DOS dedos a la vez sin mover
+  // (feedback de juego real, "se movían al lugar del clic").
+  { text:'Toca la pantalla con DOS dedos a la vez, sin mover, para deseleccionar todo.', dur:2.2,
     actors:[{sprite:'unit_infantry', emoji:'⚔️', x:150,y:110, h:30, selFrom:0, selTo:0.9}],
-    taps:[{t:0.9,x:255,y:155}] },
+    fx(t){ if(t>=0.65 && t<1.15) tpTwoFingerDrag(190,150,22); } },
   { text:'Toca tu Centro Urbano y entrena una unidad nueva desde su cola.', dur:2.8,
     props:[{sprite:'bld_town', emoji:'🏛️', x:95,y:112, h:70}],
     actors:[{sprite:'unit_villager', emoji:'👷', x:155,y:145, h:26, showAt:1.9}],
     taps:[{t:0.5,x:95,y:112}],
     fx(t){ if(t>=0.6 && t<1.9) tpBar(60,152,60,(t-0.6)/1.3,'#caa46a'); } },
-  { text:'Toca el Centro Urbano y avanza a la siguiente Era.', dur:3.0,
-    props:[{sprite:'bld_town', emoji:'🏛️', x:170,y:108, h:76}],
-    taps:[{t:0.6,x:170,y:108}],
+  // Subir de Era: antes solo se veía un toque sobre el edificio, sin panel,
+  // "no se entiende porque no se ve el menú" (feedback de juego real). Ahora
+  // simula el panel de acciones apareciendo y el segundo toque sobre su
+  // botón real, y de paso muestra el Centro Urbano cambiando de gráfica al
+  // avanzar de Era (mismo arte que usa el juego de verdad).
+  { text:'Toca tu Centro Urbano: se abre su panel de acciones. Pulsa "Avanzar de Era" para subir a la siguiente Era.', dur:3.4,
+    taps:[{t:0.5,x:170,y:90},{t:1.6,x:170,y:164}],
     fx(t){
-      if(t>=0.7){ const a=Math.min(1,(t-0.7)/1.0);
-        ctx.beginPath(); ctx.arc(170,86,24+a*30,0,Math.PI*2);
+      tpSprite(t<1.7?'bld_town':'bld_town_age2', 170,90,72,'🏛️');
+      if(t>=0.6){ tpDrawPanel(138,52); tpDrawButton(115,150,110,28,'⚒️ Avanzar de Era', t>=1.55 && t<2.0); }
+      if(t>=1.7){ const a=Math.min(1,(t-1.7)/0.9);
+        ctx.beginPath(); ctx.arc(170,70,20+a*28,0,Math.PI*2);
         ctx.strokeStyle=`rgba(255,214,110,${0.7*(1-a)})`; ctx.lineWidth=3; ctx.stroke(); }
-      ctx.font='12px sans-serif'; ctx.textAlign='center'; ctx.fillStyle='#ffe9b0';
-      ctx.fillText(t<1.4 ? 'Edad Inicial' : 'Edad de las Herramientas ⬆️', 170, 172);
     } },
   { text:'Con una unidad militar seleccionada, toca al enemigo para atacarlo.', dur:2.6,
     actors:[
@@ -6096,11 +6156,16 @@ const TP_STEPS = [
       for(const [x,y,e] of [[60,55,'🌲'],[260,45,'🪨'],[150,150,'🏠'],[40,140,'💰'],[300,150,'🌳']]) ctx.fillText(e, x+shift, y);
       tpTwoFingerDrag(TP_W/2 + shift*0.25, 100, 26);
     } },
-  { text:'Investiga una mejora en el edificio de entrenamiento para potenciar tu unidad.', dur:2.8,
-    props:[{sprite:'bld_barracks', emoji:'🛡️', x:75,y:112, h:56}],
-    actors:[{sprite:'unit_infantry', emoji:'⚔️', x:195,y:122, h:30, switchAt:1.6, spriteAfter:'unit_infantry_t1'}],
-    taps:[{t:0.6,x:75,y:112}],
-    fx(t){ if(t>=1.5 && t<2.1){ const a=(t-1.5)/0.6; ctx.beginPath(); ctx.arc(195,122,14+a*18,0,Math.PI*2); ctx.strokeStyle=`rgba(255,214,110,${0.8*(1-a)})`; ctx.lineWidth=3; ctx.stroke(); } } },
+  // Mejorar unidad: mismo problema que subir de Era ("no se entiende, no se
+  // ve el menú") — se simula el panel del Cuartel con el botón de la mejora.
+  { text:'Toca tu Cuartel: se abre su panel. Pulsa la mejora para investigarla y potenciar esa unidad ya entrenada.', dur:3.2,
+    props:[{sprite:'bld_barracks', emoji:'🛡️', x:75,y:80, h:52}],
+    actors:[{sprite:'unit_infantry', emoji:'⚔️', x:230,y:130, h:30, switchAt:2.1, spriteAfter:'unit_infantry_t1'}],
+    taps:[{t:0.5,x:75,y:80},{t:1.6,x:75,y:150}],
+    fx(t){
+      if(t>=0.6){ tpDrawPanel(128,52); tpDrawButton(30,140,100,28,'⚔️ Mejorar', t>=1.55 && t<2.1); }
+      if(t>=2.1 && t<2.7){ const a=(t-2.1)/0.6; ctx.beginPath(); ctx.arc(230,130,14+a*18,0,Math.PI*2); ctx.strokeStyle=`rgba(255,214,110,${0.8*(1-a)})`; ctx.lineWidth=3; ctx.stroke(); }
+    } },
   { text:'Con tropas seleccionadas, toca un edificio enemigo para atacarlo.', dur:2.8,
     props:[{sprite:'bld_house', emoji:'🏠', x:252,y:110, h:46, team:'enemy'}],
     actors:[{sprite:'unit_infantry', emoji:'⚔️', h:28, selFrom:0,
@@ -6125,7 +6190,7 @@ function tpLoop(now){
 }
 function renderTutPreview(){
   const step = TP_STEPS[tpIdx];
-  document.getElementById('tpText').textContent = 'Paso '+(tpIdx+1)+'/10 — '+step.text;
+  document.getElementById('tpText').textContent = 'Paso '+(tpIdx+1)+'/'+TP_STEPS.length+' — '+step.text;
   document.getElementById('tpDots').innerHTML = TP_STEPS.map((_,i)=>'<span class="'+(i===tpIdx?'on':'')+'"></span>').join('');
   tpStart = performance.now();
   if(tpAnimId) cancelAnimationFrame(tpAnimId);

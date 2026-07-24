@@ -2508,3 +2508,53 @@ función de origen solo corre en el host).
     corchetes + titileo visibles y sin estrellas; regresión de
     aldeanos-en-murallas (16/16, 0 atrapados) y partida simulada con IA
     Difícil, ambas sin errores de consola.
+- **Gráficas del Centro Urbano por Era y correcciones al tutorial simulado**
+  (2026-07-24): el usuario subió las 3 gráficas (Edad de las Herramientas/
+  Feudal/Imperial, `edad de las herramientas.png`/`edad feudal.png`/
+  `edad imperial.png`, 1000×1444 con fondo blanco) como `.zip` adjunto.
+  - **Procesado de imágenes**: recorte del fondo blanco por flood-fill desde
+    los bordes (deja intactos los blancos internos, igual que el pipeline de
+    `board_sprites.json` de la Fase 9B), recorte al bbox de contenido y tope
+    de 900px de lado mayor (el atlas ya las reescala a su tamaño real de uso)
+    → `bld_town_age2/3/4.png`, de ~1.7-2.3MB originales a ~0.78-1.06MB con
+    transparencia real. Aspecto (ancho/alto ≈0.69) consistente con
+    `bld_town.png` original, así que no hace falta el ajuste "contain" de
+    las unidades — el escalado por altura de siempre les sirve igual.
+  - **Cambio de gráfica por Era**: nueva `townSpriteName(owner)` — Era
+    Inicial usa `bld_town` de siempre, Eras II-IV usan `bld_town_age`+era.
+    `drawBuilding` la usa solo para `btype==='town'`; el resto de edificios
+    sin cambios. Registrado en `SPRITE_FILES` y reempaquetado el atlas
+    (41 sprites, antes 38).
+  - **Tutorial: deseleccionar corregido** — el frame simulaba un toque de 1
+    dedo en el mapa, que en el juego real MUEVE a la unidad seleccionada al
+    punto tocado (feedback de juego real: "eso hace que se muevan al lugar
+    del clic"). Ahora simula el gesto real: dos círculos blancos estáticos
+    apareciendo a la vez (toque de 2 dedos sin mover), con el texto
+    explicándolo.
+  - **Tutorial: subir de Era / mejorar unidad, más descriptivos** — antes
+    solo se veía un toque sobre el edificio sin más contexto ("no se
+    entiende porque no se ve el menú"). Nuevo `tpDrawPanel`/`tpDrawButton`
+    simulan el panel de acciones apareciendo tras el primer toque, con un
+    botón real ("⚒️ Avanzar de Era" / "⚔️ Mejorar") que recibe un SEGUNDO
+    toque simulado — reproduce el flujo real de dos pasos. El paso de subir
+    de Era, de paso, muestra el Centro Urbano cambiando de `bld_town` a
+    `bld_town_age2` con el MISMO arte que usa el juego de verdad (pedido
+    explícito: "cuando actualices las gráficas actualizas el frame de
+    tutorial que muestra la mejora de edad").
+  - **Tutorial: 2 frames nuevos** (10→12 pasos totales) — "Doble toque sobre
+    una unidad: selecciona todas las del mismo tipo visibles en pantalla"
+    (3 unidades del mismo tipo se iluminan, un aldeano cercano NO) y
+    "Arrastra con un dedo sobre el mapa: caja de selección para varias
+    unidades a la vez" (caja punteada creciendo desde el dedo, unidades
+    dentro seleccionadas, una fuera de la caja no). El contador "Paso X/N"
+    ahora usa `TP_STEPS.length` en vez de un "/10" fijo (se había quedado
+    desactualizado en el primer intento de esta misma tanda).
+  - Verificado headless: recorrida la vista previa completa (12 pasos) sin
+    errores de consola, con capturas de cada paso confirmando visualmente
+    el doble toque (3 seleccionadas, 1 sin seleccionar), el arrastre de
+    caja, el gesto de 2 dedos para deseleccionar y el panel con botón para
+    subir de Era/mejorar; `townSpriteName('player')` confirmado devolviendo
+    `bld_town`/`bld_town_age2`/`bld_town_age3`/`bld_town_age4` según la Era;
+    captura del Centro Urbano en Edad Feudal mostrando la gráfica nueva
+    dentro de su huella de 4×4 casillas; regresión de aldeanos-en-murallas
+    (16/16, 0 atrapados) y partida simulada con IA Difícil sin errores.
