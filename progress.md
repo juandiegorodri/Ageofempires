@@ -2325,3 +2325,119 @@ función de origen solo corre en el host).
   de `shakeT` cuadro a cuadro, y diferencia real de píxeles entre cuadros
   consecutivos mientras dura); regresión de ~300s con IA Difícil sin errores
   de consola.
+- **Correcciones tras juego real: tamaño/orientación de unidades por tier,
+  huellas y muralla-trampa** (2026-07-24): 4 problemas concretos reportados
+  jugando con el arte por tier de la Fase 9B.
+  - **Escala inconsistente al mejorar de tier**: `unit_pike_t1.png` (Alabardero)
+    y `unit_cavalry_t1`/`unit_cavalry_t2.png` (Caballero/Paladín) tenían
+    canvases mucho más grandes que el personaje real (asta larga o el
+    caballo dibujado en el eje vertical en vez de horizontal como el resto
+    del set), y `drawSprite` escala el canvas COMPLETO a una altura fija —
+    el personaje quedaba diminuto frente a sus hermanos. Recortados
+    (`pike_t1`, `infantry_t2`) o rotados 90° (`cavalry_t1`, `cavalry_t2`, que
+    estaban en el eje equivocado) y reempaquetado `assets/atlas.png`/
+    `atlas.json` (obligatorio: el atlas tiene prioridad sobre el PNG suelto).
+  - **Orientación de movimiento corregida** (`faceOffset`/`TIER_FACE_OFFSET`,
+    recalibrados empíricamente probando las 4 direcciones cardinales, no solo
+    por inspección visual): Catapulta (iba al revés), Campeón, Alabardero
+    (arma en diagonal ~45°, requirió un valor fuera del barrido habitual de
+    90°), Héroe Espada y Héroe Arco (se movían de lado) corregidos.
+  - **La Catapulta ya deja huellas**: se quitó su exclusión explícita
+    (pensada para "tiene ruedas, no pies", pero el jugador lo percibió como
+    un bug real).
+  - **Aldeanos atrapados en murallas al construirlas (persistía)**: la
+    protección existente (`unstickUnitsNearWall`) solo actuaba en el
+    instante en que un tramo terminaba de construirse; un aldeano podía
+    quedar encajado después por simple apiñamiento (`separate()`) sin que
+    ningún muro cambiara de estado. Ahora el chequeo de cada unidad, en CADA
+    cuadro, llama a `escapeWallIfStuck` en cuanto detecta que su posición de
+    reposo (antes de separar) ya está bloqueada por una muralla propia —red
+    de seguridad continua, no solo por evento. Verificado con 16 tramos de
+    muralla y 16 aldeanos construyendo en simultáneo: 0 atrapados.
+- **Tanda grande de mejoras pedidas tras jugar**: automatización de aldeanos,
+  selección, mapa, partida/menú principal y tutorial más accesible
+  (2026-07-24). Batería de 11 peticiones concretas, todas en una sola tanda:
+  - **Aldeanos iniciales repartidos**: los 3 aldeanos del jugador al empezar
+    arrancan recolectando comida/madera/oro (uno cada uno,
+    `assignStartingVillagers`) en vez de quedar `idle` a la espera de
+    órdenes manuales.
+  - **Radio de búsqueda de recurso limitado** (`IDLE_GATHER_RADIUS`, 5
+    casillas de tablero = 200px): un aldeano que agota su recurso y busca
+    trabajo (`autoAssignIdle`) ya no viaja indefinidamente hacia el nodo
+    disponible más cercano —podía terminar cerca de la base rival y
+    "regalarse"—; si no hay nada dentro del radio, se queda quieto (sigue
+    `idle`) en vez de alejarse.
+  - **Doble toque de selección rápida solo para ejército**: `handleDoubleTap`
+    ya no dispara "seleccionar todos los del mismo tipo" para aldeanos ni
+    edificios (`UNIT[type].cat!=='villager'` como única condición); en esos
+    casos cae a un toque normal.
+  - **Haz de luz vertical sobre lo seleccionado** (`drawSelBeam`): además del
+    anillo/corchetes ya existentes, un cono de luz translúcido (gradiente,
+    `globalCompositeOperation:'lighter'`) sube desde cada unidad/edificio
+    seleccionado, para verlo de un vistazo en medio del combate.
+  - **Selector de tamaño de mapa** (Pequeño/Grande ×1.5/Enorme ×2,
+    `applyMapSize`): `WORLD` pasa de `const` de solo lectura a un objeto
+    mutable escalado sobre `BASE_WORLD`; `FOG_COLS`/`FOG_ROWS` (antes
+    `const`) se recalculan y las rejillas de niebla/A* (`fogExplored`,
+    `fogVisible`, `fogCanvas`, `pathGrids`) se reconstruyen a ese nuevo
+    tamaño. `generateMap` escala los offsets fijos de los clusters de
+    recursos (`mapScale`) y añade clusters/obstáculos extra proporcionales
+    al ÁREA del mapa (`areaScale`) para que un mapa grande no se sienta
+    vacío. Aplicado en `startGame`, `clientStartFromInit` (recibe
+    `cfg.mapSize` del anfitrión) y `applySaveObject` (desde `gameConfig`
+    guardado), siempre ANTES de tocar niebla/entidades.
+  - **Barra de puntaje en vivo** (`#scoreBoard`, esquina inferior derecha,
+    apilada sobre el minimapa): nombres de los dos bandos + una puntuación
+    (`computeScore`: recursos totales + valor militar vivo×1.5 + bajas/
+    bajas enemigas/edificios construidos/tropas entrenadas/era, con
+    penalización por pérdidas propias) que se refresca junto al minimapa
+    (~4.5Hz, `updateScoreBoard`).
+  - **Alias del jugador + nombres graciosos para la IA**: input en la
+    pantalla de título (`#myNameInput`, 16 caracteres máx.), saneado con
+    `sanitizeName` (solo letras/números/espacios vía `\p{L}\p{N}`, sin
+    símbolos ni HTML — protege contra inyección) y persistido en
+    `localStorage`. La IA de un jugador recibe un nombre al azar de
+    `FUNNY_AI_NAMES` (BarbaRosa, JuanaLaCuerda, GuillermoElComelón…) en cada
+    partida nueva. En multijugador el alias real viaja en el `hello`
+    (cliente→anfitrión) y en el `init` (anfitrión→cliente, `cfg.hostName`),
+    con los bandos ya invertidos como el resto del protocolo.
+  - **El anfitrión de una sala MP elige las opciones de la partida**: pulsar
+    "Crear sala"/"Crear partida (anfitrión)" ya no aloja directamente — lleva
+    primero al MISMO panel de configuración de la partida contra la IA
+    (`enterSetupForHost`, oculta solo la opción de dificultad de IA, que no
+    aplica), y `▶ Empezar partida` pasa a `🌐 Crear sala con estas opciones`;
+    al pulsarlo recién ahí se abre la sala (`netOnlineHostStart`/
+    `netHostStart`) con el `gameConfig` ya elegido, que via `netSendInit`
+    llega también al tamaño de mapa del cliente.
+  - **Chat multijugador** (`#chatPanel`, botón 💬 en `#util`, solo visible
+    con `inMP()`): mensajes de texto simples entre los dos jugadores sobre
+    el transporte ya existente (comando de red `{t:'chat', from, msg}`,
+    manejado en `netOnMessage` ANTES de la rama host/cliente para que
+    funcione en ambos sentidos); el HTML se escapa al pintarse
+    (`escapeHtml`) para que un mensaje no pueda inyectar marcado.
+  - **Vida de edificios ×2**: todos los valores de `hp` en `BLD` (Centro
+    Urbano, casas, cuartel/galería/establo/herrería, torres, castillo,
+    edificios de producción, murallas/torres de muralla/puerta, taller de
+    asedio, mercado) se duplicaron — feedback de juego real: "está siendo
+    muy fácil destruirlos".
+  - **Botón "🎬 Ver tutorial"** en el menú principal: presentación PASIVA de
+    10 frames (`TUT_PREVIEW`) con un icono animado (rebote/pulso/deslizamiento
+    en CSS puro) y una frase corta por paso, navegable con Anterior/Siguiente
+    — a diferencia del tutorial guiado de 10 pasos ya existente (Fase 6),
+    esta no exige jugar de verdad ni depende del estado de una partida en
+    curso, así que sirve para entenderlo ANTES de empezar.
+  - Verificado headless: reparto inicial de aldeanos por recurso confirmado
+    (food/wood/gold); aldeano forzado lejos de cualquier fuente se queda
+    `idle` en vez de perseguir un recurso lejano; doble toque en aldeano cae
+    a selección simple (comprobado con `pickAt` sustituido); `render()` no
+    lanza error con la nueva capa de selección; alias saneado al vuelo
+    (etiquetas/símbolos eliminados); vista previa del tutorial navega y se
+    cierra bien (tuvo que ocultar `#startScreen` explícitamente, hermano
+    posterior en el DOM con el mismo z-index, si no tapaba sus propios
+    clics); mapa Enorme confirmado en `WORLD`/`FOG_COLS`/`FOG_ROWS`
+    (5200×3000, 130×75 celdas); flujo de "Crear sala" confirmado que NO
+    aloja hasta pulsar "Empezar partida" en el panel de configuración;
+    mensaje de chat simulado recibido y almacenado; vida de edificios
+    doblada confirmada (`BLD.town.hp===2400`, etc.); regresión de
+    aldeanos-en-murallas (16 tramos/16 aldeanos, 0 atrapados) y partida
+    simulada con IA Difícil, ambas sin errores de consola.
